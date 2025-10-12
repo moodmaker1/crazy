@@ -1,0 +1,121 @@
+/* style.css */
+
+/* ===== 전체 레이아웃 (유지) ===== */
+[data-testid="stAppViewContainer"] {
+  background-color: #f8fafc;
+  font-family: "Noto Sans KR", sans-serif;
+}
+
+/* Streamlit 기본 블록 (유지) */
+.block-container {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 모든 컨텐츠를 중앙 정렬 */
+}
+
+/* --- 헤더 --- */
+.header {
+  background: #ffffff;
+  border-radius: 15px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  padding: 1.5em 2em;
+  width: 90%;
+  max-width: 850px; 
+  text-align: center;
+  margin-top: 50px; 
+  /* ⭐ 중앙 정렬로 복원 */
+  margin: 50px auto 20px auto; 
+}
+
+
+.header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-weight: 700;
+  font-size: 1.6em;
+  /* ⭐ h2 텍스트 정렬 명시적으로 중앙 */
+  text-align: center; 
+}
+
+
+/* ===== 카드 공통 (모든 단계의 카드) ===== */
+.card {
+  background: #ffffff;
+  border-radius: 15px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  padding: 1.8em 2em;
+  width: 90%;
+  max-width: 850px; 
+  /* ⭐ 중앙 정렬로 복원 */
+  margin: 20px auto; 
+  text-align: left; 
+}
+
+.card h3 {
+    text-align: center;
+}
+
+/* --- 질문 카드 (start 단계) --- */
+.welcome-card {
+  padding: 1.0em 2em; 
+  margin-top: 20px; 
+  margin-bottom: 20px; 
+  border-radius: 15px; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  /* ⭐ 중앙 정렬로 복원 */
+  margin: 20px auto; 
+  text-align: center; 
+}
+
+.welcome-card h3 {
+    margin: 0; 
+    font-size: 1.4em; 
+}
+
+/* --- 버튼 정렬 (start 단계 버튼) --- */
+div[data-testid="stHorizontalBlock"] {
+    max-width: 360px; 
+    width: 100%; 
+    margin: 0 auto;
+    padding-left: 0 !important; 
+    padding-right: 0 !important; 
+}
+
+/* --- 텍스트 입력 필드 정렬 보정 (A_1, B_1 단계 등) --- */
+/* Streamlit text_input, number_input 등을 포함하는 부모 요소 */
+div[data-testid="stTextInput"],
+div[data-testid="stNumberInput"] {
+    /* 텍스트 입력 필드 자체를 카드 폭에 맞게 넓히거나 정렬합니다. */
+    width: 100%; /* 카드 내부 전체 폭 사용 */
+    margin-bottom: 1rem; /* 간격 추가 */
+}
+
+/* --- 일반 카드 내부 버튼 정렬 (A_1, B_1 단계 등) --- */
+/* 카드 내부의 st.columns로 생성된 버튼 블록 (col1, col2) */
+/* .card 내부의 stHorizontalBlock에만 적용되도록 범위를 좁힙니다. */
+.card div[data-testid="stHorizontalBlock"] {
+    /* start 단계 버튼 정렬과 구분하기 위해 max-width를 카드 폭에 가깝게 설정 */
+    max-width: 810px; /* 카드 내부 패딩을 제외한 폭 */
+    margin-top: 1.5rem; /* 입력 필드와의 간격 */
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* ===== 버튼 ===== */
+div.stButton > button {
+  background-color: white;
+  color: #1f2937;
+  border: 2px solid #4b9ce2;
+  border-radius: 25px;
+  padding: 0.6em 1.5em;
+  font-weight: 600;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+div.stButton > button:hover {
+  background-color: #4b9ce2; 
+  color: white;
+}

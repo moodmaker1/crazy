@@ -1,0 +1,98 @@
+# ==========================
+# 기본 Python 무시 규칙
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==========================
+# 가상환경 / IDE / 시스템
+# ==========================
+.venv/
+env/
+venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ==========================
+# 로그 / 캐시 / 임시파일
+# ==========================
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.out
+*.err
+*.ipynb_checkpoints/
+.cache/
+logs/
+nohup.out
+
+# ==========================
+# 데이터 / 모델 아웃풋
+# ==========================
+data/
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.pkl
+*.pickle
+*.json
+*.feather
+*.zip
+*.gz
+*.tar
+*.tar.gz
+outputs/
+experiments/clusters_k4_baseline/outputs/
+experiments/clusters_k4_baseline/data/
+!experiments/clusters_k4_baseline/data/README.md
+
+# ==========================
+# Streamlit 관련
+# ==========================
+.streamlit/
+reports/
+*.db
+
+# ==========================
+# Jupyter / Notebook 관련
+# ==========================
+.ipynb_checkpoints/
+*.ipynb
+notebooks/
+*.nbconvert.ipynb
+
+# ==========================
+# OS / 빌드 아티팩트
+# ==========================
+build/
+dist/
+*.egg-info/
+*.egg
+MANIFEST
+*.spec
+
+# ==========================
+# 환경 설정 / 시크릿
+# ==========================
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.token
+*.secrets.json
+config.yaml
+config.yml
+
+# ==========================
+# __experiment only for dev
+# ==========================
+experiments/tmp/
+experiments/dev_*/
+experiments/test_*/
