@@ -380,7 +380,7 @@ def main():
     """메인 실행 함수"""
     
     # 0. Gemini API 키 설정
-    GEMINI_API_KEY = "AIzaSyDTd6l7sR7LakKLHe9-6oN2DamBlBWyzAc"
+    GEMINI_API_KEY = "여기에 내 키값 입력"
     
     # API 키가 설정되지 않았다면 환경변수에서 가져오기 시도
     if GEMINI_API_KEY == "여기에_당신의_Gemini_API_키를_입력하세요":
