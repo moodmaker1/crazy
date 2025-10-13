@@ -1,8 +1,10 @@
 """
-RAG3: 요식업 가맹점 문제 진단 및 해결 컨설팅 시스템 (웹페이지용)
-- LLM이 모델링 결과와 RAG 문서를 분석하여 맞춤형 솔루션 생성
-- 웹페이지에 표시할 간결한 답변 형식
-- 3개 섹션: 인사이트 2개 + 전략 2개 + 솔루션 2개
+RAG3: 요식업 가맹점 문제 진단 및 해결 컨설팅 시스템
+
+사용법:
+1. 아래 GEMINI_API_KEY와 data_folder 경로 설정
+2. python rag3.py 실행
+3. consulting_response.txt 파일 확인
 """
 
 import os
@@ -18,7 +20,23 @@ warnings.filterwarnings('ignore')
 
 
 class RAG3ConsultingSystem:
-    """LLM 기반 요식업 컨설팅 시스템 (웹페이지용)"""
+    """LLM 기반 요식업 컨설팅 시스템"""
+    
+    # 12개 문제 유형 정의
+    PROBLEM_TYPES = {
+        "재방문율 저조": "충성 고객 확보를 위한 쿠폰/스탬프 제도 도입",
+        "신규고객 유입 부족": "신규 고객 타겟 배달앱 할인 또는 첫 방문 이벤트",
+        "객단가 하락": "가치 상승을 위한 세트 메뉴 개발 또는 메뉴 고급화",
+        "충성도 하락": "단골 고객 대상 특별 혜택 또는 재방문 감사 프로모션",
+        "매출 변동성 심화": "안정적 매출 확보를 위한 점심 구독 서비스 또는 정기 이벤트 기획",
+        "고객 이탈 심화": "고객 피드백 채널 마련 및 서비스 만족도 개선 캠페인",
+        "상권 내 경쟁 심화": "경쟁점과 차별화되는 우리 가게만의 시그니처 메뉴 개발",
+        "유동고객 의존도 심화": "주변 거주/직장인 대상 로컬 마케팅 강화",
+        "배달 효율 저하": "배달 주문 전용 메뉴 개발 또는 최소주문금액 조정",
+        "특정고객 쏠림 심화": "새로운 고객층 유입을 위한 타겟 프로모션 (예: 1020세대 이벤트)",
+        "매출 규모 감소": "매출 증대를 위한 피크타임 세트 메뉴 출시 또는 배달 활성화",
+        "고객 방문 빈도 감소": "재방문 유도를 위한 마일리지 제도 또는 요일별 이벤트"
+    }
     
     def __init__(self, data_folder_path, gemini_api_key):
         self.data_folder = Path(data_folder_path)
@@ -42,12 +60,22 @@ class RAG3ConsultingSystem:
             try:
                 df = pd.read_excel(file_path, sheet_name=0)
                 file_name = file_path.stem
-                content = self._extract_content_from_df(df, file_name)
+                
+                # 텍스트 변환
+                content_parts = [file_name]
+                content_parts.append(" ".join([str(col) for col in df.columns if pd.notna(col)]))
+                
+                for idx, row in df.head(30).iterrows():
+                    row_text = " ".join([str(val) for val in row if pd.notna(val) and str(val).strip()])
+                    if row_text:
+                        content_parts.append(row_text)
+                
+                content = " ".join(content_parts)
                 
                 self.documents.append({
                     'file_name': file_name,
                     'content': content,
-                    'raw_data': df.to_string()[:3000]
+                    'raw_data': df.to_string()[:1500]
                 })
                 
                 print(f"  ✓ {file_name}")
@@ -56,18 +84,6 @@ class RAG3ConsultingSystem:
                 print(f"  ✗ {file_path.name}: {str(e)}")
         
         print(f"\n✅ 총 {len(self.documents)}개 문서 로드 완료!\n")
-        
-    def _extract_content_from_df(self, df, file_name):
-        """데이터프레임 → 텍스트 변환"""
-        content_parts = [file_name]
-        content_parts.append(" ".join([str(col) for col in df.columns if pd.notna(col)]))
-        
-        for idx, row in df.head(30).iterrows():
-            row_text = " ".join([str(val) for val in row if pd.notna(val) and str(val).strip()])
-            if row_text:
-                content_parts.append(row_text)
-        
-        return " ".join(content_parts)
     
     def build_embeddings(self):
         """문서 임베딩 생성"""
@@ -81,31 +97,25 @@ class RAG3ConsultingSystem:
         print("✅ 임베딩 생성 완료!\n")
         return True
     
-    def search_documents(self, problem_name, industry, store_name, market_context, top_k=3):
-        """
-        LLM 기반 유연한 RAG 문서 검색
-        - 문제명 + 업종 + 매장명 + 상권 특성으로 검색 쿼리 자동 생성
-        """
+    def search_documents(self, problem_name, industry, store_name, market_context, top_k=2):
+        """RAG 문서 검색"""
         
         if len(self.documents) == 0 or self.doc_embeddings is None:
             return []
         
-        # 검색 쿼리 생성 (모든 컨텍스트 활용)
         search_query = f"{problem_name} {industry} {store_name} {market_context} 외식 소비자 행태 마케팅"
         
         print(f"🔍 RAG 문서 검색 중...")
         print(f"  문제: {problem_name}")
         print(f"  업종: {industry}")
         print(f"  상권: {market_context}")
-        print(f"  검색 쿼리: {search_query}\n")
         
-        # 임베딩 검색
         query_embedding = self.model.encode([search_query])
         similarities = cosine_similarity(query_embedding, self.doc_embeddings)[0]
         top_indices = np.argsort(similarities)[-top_k:][::-1]
         
         results = []
-        print(f"📊 관련도 높은 상위 {top_k}개 문서:\n")
+        print(f"\n📊 관련도 높은 상위 {top_k}개 문서:\n")
         
         for rank, idx in enumerate(top_indices, 1):
             doc = self.documents[idx]
@@ -124,19 +134,124 @@ class RAG3ConsultingSystem:
         return results
     
     def generate_consulting_response(self, modeling_data, relevant_docs):
-        """
-        웹페이지용 컨설팅 답변 생성
-        - 간결하고 읽기 쉬운 형식
-        - LLM이 모델링 결과와 RAG 문서를 분석하여 맞춤형 답변 생성
-        """
+        """컨설팅 답변 생성"""
         
         print("=" * 80)
-        print("🎯 웹페이지용 컨설팅 답변 생성 중...")
+        print("🎯 컨설팅 답변 생성 중...")
         print("=" * 80)
         print()
         
-        # 프롬프트 생성
-        prompt = self._build_prompt(modeling_data, relevant_docs)
+        # 프롬프트 구성
+        top_issue = modeling_data['analysis']['diagnosis_top3'][0]
+        problem_name = top_issue['약점']
+        severity = top_issue['심각도']
+        
+        # 기본 솔루션 가져오기
+        base_solution = self.PROBLEM_TYPES.get(problem_name, "맞춤 전략 개발 필요")
+        
+        # 모든 문제 정리
+        all_issues = ""
+        for idx, issue in enumerate(modeling_data['analysis']['diagnosis_top3'], 1):
+            base_sol = self.PROBLEM_TYPES.get(issue['약점'], "맞춤 전략 필요")
+            all_issues += f"{idx}. **{issue['약점']}** (심각도 {issue['심각도']}/100)\n"
+            all_issues += f"   → 기본 솔루션: {base_sol}\n\n"
+        
+        docs_info = ""
+        for doc in relevant_docs:
+            docs_info += f"**[{doc['rank']}] {doc['file_name']}** (유사도 {doc['similarity']:.0f}%)\n"
+            docs_info += f"```\n{doc['raw_data']}\n```\n\n"
+        
+        industry = modeling_data.get('industry', '요식업')
+        market_context = modeling_data['analysis']['market_type_context']
+        
+        prompt = f"""당신은 요식업 마케팅 전문가입니다. 
+        
+매장의 **가장 큰 문제점**과 이를 해결할 **구체적이고 실행 가능한 마케팅 아이디어**를 RAG 데이터 근거와 함께 제시하세요.
+
+## 📍 매장 정보
+- **매장명**: {modeling_data['store_name']}
+- **업종**: {industry}
+- **상권 특성**: {market_context}
+
+## 🚨 진단 결과 (모델링 분석)
+{all_issues}
+
+## 📚 RAG 참고 문서 (외식업 데이터)
+{docs_info}
+
+---
+
+## ✅ 답변 형식 (반드시 준수)
+
+# {modeling_data['store_name']} 마케팅 컨설팅 리포트
+
+## 🎯 1. 핵심 문제 진단
+
+### 최우선 해결 과제: **{problem_name}** (심각도 {severity}/100)
+
+**[문제 상황]**
+- 현재 상황: (상권 특성과 연계하여 1-2문장)
+- 발생 원인: (RAG 데이터 근거 1-2문장)
+
+**[RAG 데이터 근거]**
+- **[문서1]**: (핵심 데이터 인용, 수치 포함)
+- **[문서2]**: (추가 근거 데이터, 트렌드)
+
+---
+
+## 💡 2. 맞춤 마케팅 전략 (실행 중심)
+
+### 전략 1: [구체적 전략명]
+- **목표**: {problem_name} 해결을 위한 핵심 목표
+- **실행 방법**: 
+  1. (구체적 실행 단계 1 - 누가, 언제, 무엇을)
+  2. (구체적 실행 단계 2)
+  3. (구체적 실행 단계 3)
+- **예상 효과**: (수치 목표 포함)
+- **RAG 근거**: [문서명]의 (데이터 인용)
+
+### 전략 2: [보조 전략명]
+- **목표**: 2순위 문제 해결
+- **실행 방법**: 
+  1. (실행 단계)
+  2. (실행 단계)
+- **예상 효과**: (측정 가능한 목표)
+
+---
+
+## 🚀 3. 즉시 실행 캠페인 (2개)
+
+### 캠페인 1: "💪 [캠페인명]!" 
+- **실행 기간**: (예: 1개월, 2주 등)
+- **타겟**: (구체적 고객층)
+- **실행 내용**: 
+  - (구체적 방법 1)
+  - (구체적 방법 2)
+  - (홍보 채널)
+- **예상 효과**: {problem_name} 개선 목표 (수치)
+
+### 캠페인 2: "📸 [캠페인명]!"
+- **실행 기간**: 
+- **타겟**: 
+- **실행 내용**: 
+  - (방법)
+  - (방법)
+- **예상 효과**: 
+
+---
+
+## 📊 4. 기대 효과 요약
+- **{problem_name}** → (개선 목표치, 예: 20% 향상)
+- 2순위 문제 → (개선 목표)
+- 전체 매출 영향 → (예상 수치)
+
+**작성 원칙**: 
+1. **문제 진단**을 가장 앞에 명확히 제시
+2. 모든 전략은 **RAG 문서 데이터를 근거**로 제시
+3. **{industry} 특성**을 반영한 실행 방안
+4. **측정 가능한 목표** 제시
+5. 이모지 활용하여 가독성 향상 (💰📈🎯📊)
+"""
         
         try:
             response = self.gemini_model.generate_content(prompt)
@@ -156,170 +271,68 @@ class RAG3ConsultingSystem:
             print(f"❌ Gemini API 오류: {str(e)}")
             return None
     
-    def _build_prompt(self, modeling_data, relevant_docs):
-        """
-        웹페이지용 프롬프트 생성
-        - 간결한 답변 형식
-        """
-        
-        # 최우선 문제
-        top_issue = modeling_data['analysis']['diagnosis_top3'][0]
-        problem_name = top_issue['약점']
-        severity = top_issue['심각도']
-        
-        # 기타 문제들
-        other_issues = ""
-        for idx, issue in enumerate(modeling_data['analysis']['diagnosis_top3'][1:], 2):
-            other_issues += f"{idx}순위: {issue['약점']} (심각도 {issue['심각도']})\n"
-        
-        # RAG 문서 정보 (속도 개선: 1000자로 축소)
-        docs_info = ""
-        for doc in relevant_docs:
-            docs_info += f"\n**[문서 {doc['rank']}] {doc['file_name']}** (관련도 {doc['similarity']:.0f}%)\n"
-            docs_info += f"```\n{doc['raw_data'][:1000]}\n```\n"
-        
-        # 추천사항
-        recommendations = "\n".join([f"- {rec}" for rec in modeling_data.get('recommendations', [])])
-        
-        industry = modeling_data.get('industry', '요식업')
-        market_context = modeling_data['analysis']['market_type_context']
-        
-        prompt = f"""당신은 요식업 전문 경영 컨설턴트입니다. 매장의 문제를 진단하고 실행 가능한 해결책을 제시합니다.
-
-## 📍 매장 정보
-- **매장명**: {modeling_data['store_name']}
-- **업종**: {industry}
-- **상권 특성**: {market_context}
-
-## 🚨 모델링 진단 결과
-
-### 최우선 해결 과제
-**문제**: {problem_name}
-**심각도**: {severity}/100
-
-### 기타 발견된 문제
-{other_issues}
-
-### 모델링 추천사항
-{recommendations}
-
-## 📚 RAG 참고 문서 (외식업 빅데이터)
-{docs_info}
-
----
-
-## 📝 답변 작성 지시사항
-
-웹페이지에 표시할 간결한 컨설팅 답변을 작성하세요.
-
-### 📊 섹션 1: 시장 인사이트 (2개)
-
-RAG 문서에서 발견한 핵심 인사이트 2가지를 분석하세요.
-
-**작성 형식**:
-- 💡 **인사이트 1**: [핵심 트렌드]
-  * 데이터: [문서명]에서 "..." (간단히)
-  * 적용 방법: 1-2문장으로 우리 매장에 어떻게 적용할지
-
-- 💡 **인사이트 2**: [소비자 행태]
-  * 데이터: [문서명]에서 "..."
-  * 적용 방법: 1-2문장
-
----
-
-### 🎯 섹션 2: 매장 맞춤 전략 (2개)
-
-상권 특성({market_context})과 업종({industry})을 반영한 차별화 전략을 제시하세요.
-
-**작성 형식**:
-- 🎯 **전략 1**: [전략명]
-  * 이유: 1문장으로 왜 필요한지
-  * 방법: 2-3문장으로 구체적 실행 방법
-  * 효과: ~할 것으로 예상됩니다 (1문장)
-
-- 🎯 **전략 2**: [전략명]
-  * 이유: 1문장
-  * 방법: 2-3문장
-  * 효과: ~에 도움이 될 것입니다 (1문장)
-
----
-
-### 🔧 섹션 3: 최우선 문제 해결 전략 ⭐
-
-**문제**: {problem_name} (심각도 {severity}/100)
-
-#### 원인 분석
-모델링 결과와 상권 특성을 바탕으로 이 문제가 발생한 원인을 2-3문장으로 간결하게 분석하세요.
-
-#### 실행 솔루션 (2개)
-
-💡 **솔루션 1**: [제목]
-  * 실행 방법: 
-    - 3-4문장으로 구체적으로 설명
-  * 예산: 약 X만원
-  * 기간: X주
-  * RAG 근거: [문서명]의 데이터를 인용하여 근거 제시
-  * 예상 효과: ~하는 데 도움이 될 것으로 예상됩니다 (1-2문장)
-
-💡 **솔루션 2**: [제목]
-  * 실행 방법:
-    - 3-4문장으로 구체적으로 설명
-  * 예산: 약 X만원
-  * 기간: X주
-  * RAG 근거: [문서명]의 데이터를 인용
-  * 예상 효과: ~할 것으로 기대됩니다 (1-2문장)
-
----
-
-## ⚠️ 작성 원칙
-1. **웹페이지용 간결한 답변**: 과도하게 길지 않게
-2. **전문적이지만 읽기 쉽게**: 친근한 톤
-3. **RAG 데이터 근거 제시**: 반드시 문서명과 데이터 인용
-4. **실행 가능성**: 구체적이고 현실적인 방법 제시
-5. **{industry} 특성 반영**: 업종에 맞는 맞춤형 솔루션
-
-전문 컨설턴트답게 실용적이고 구체적인 답변을 작성하세요!
-"""
-        
-        return prompt
+    def save_response(self, modeling_data, relevant_docs, response, output_file="consulting_response.txt"):
+        """컨설팅 답변 저장"""
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write("📋 요식업 가맹점 마케팅 컨설팅 리포트\n")
+                f.write("=" * 80 + "\n\n")
+                
+                # 매장 정보
+                f.write(f"📍 매장명: {modeling_data['store_name']}\n")
+                f.write(f"📍 업종: {modeling_data.get('industry', '요식업')}\n")
+                f.write(f"📍 상권: {modeling_data['analysis']['market_type_context']}\n")
+                f.write(f"📅 생성일: {pd.Timestamp.now().strftime('%Y년 %m월 %d일 %H:%M')}\n\n")
+                
+                # 진단 결과
+                f.write("🚨 진단 결과 (12개 문제 유형 분석)\n")
+                f.write("-" * 80 + "\n")
+                for idx, issue in enumerate(modeling_data['analysis']['diagnosis_top3'], 1):
+                    problem = issue['약점']
+                    severity = issue['심각도']
+                    solution = self.PROBLEM_TYPES.get(problem, "맞춤 전략 필요")
+                    
+                    if idx == 1:
+                        f.write(f"\n🔴 {idx}순위 (최우선): {problem}\n")
+                    else:
+                        f.write(f"\n🟠 {idx}순위: {problem}\n")
+                    f.write(f"   - 심각도: {severity}/100\n")
+                    f.write(f"   - 기본 솔루션: {solution}\n")
+                
+                # RAG 참고 문서
+                f.write("\n\n📚 참고한 외식업 데이터\n")
+                f.write("-" * 80 + "\n")
+                for doc in relevant_docs:
+                    f.write(f"  [{doc['similarity']:.1f}%] {doc['file_name']}\n")
+                
+                f.write("\n\n" + "=" * 80 + "\n\n")
+                
+                # AI 생성 컨설팅 답변
+                f.write(response)
+            
+            print(f"\n📄 컨설팅 답변이 '{output_file}' 파일로 저장되었습니다.")
+            return True
+            
+        except Exception as e:
+            print(f"⚠️  파일 저장 오류: {str(e)}")
+            return False
 
 
 def main():
     """메인 실행 함수"""
     
-    # Gemini API 키
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "여기에_API_키_입력")
+    # ========================================
+    # 설정: 여기만 수정하세요!
+    # ========================================
     
-    if GEMINI_API_KEY == "여기에_API_키_입력":
-        print("⚠️  Gemini API 키를 설정해주세요!")
-        print("export GEMINI_API_KEY='your-api-key'")
-        return
+    # Gemini API 키 (필수)
+    GEMINI_API_KEY = "AIzaSyDTd6l7sR7LakKLHe9-6oN2DamBlBWyzAc"
     
-    # 1. RAG 시스템 초기화
+    # RAG 데이터 폴더 경로
     data_folder = r"C:\Temp\data\rag데이터_병진님"
     
-    try:
-        rag = RAG3ConsultingSystem(data_folder, GEMINI_API_KEY)
-    except Exception as e:
-        print(f"❌ 초기화 오류: {str(e)}")
-        return
-    
-    # 2. 문서 로드 및 임베딩 생성
-    try:
-        rag.load_documents()
-    except Exception as e:
-        print(f"❌ 문서 로드 오류: {str(e)}")
-        print("해결 방법: pip install openpyxl")
-        return
-    
-    if len(rag.documents) == 0:
-        print("\n⚠️  문서를 로드할 수 없습니다!")
-        return
-    
-    if not rag.build_embeddings():
-        return
-    
-    # 3. 샘플 데이터: 성동구 일식당
+    # 매장 정보 (분석할 매장 데이터)
     modeling_data = {
         "store_code": "00803E9174",
         "store_name": "우동명가 왕십리점",
@@ -350,17 +363,56 @@ def main():
         ]
     }
     
+    # ========================================
+    # 실행 (아래 코드는 수정 안 해도 됨)
+    # ========================================
+    
     print("\n" + "=" * 80)
+    print("🏪 RAG3 컨설팅 시스템 시작")
+    print("=" * 80)
+    
+    # 1. 시스템 초기화
+    try:
+        rag = RAG3ConsultingSystem(data_folder, GEMINI_API_KEY)
+    except Exception as e:
+        print(f"❌ 초기화 오류: {str(e)}")
+        return
+    
+    # 2. 문서 로드
+    rag.load_documents()
+    
+    if len(rag.documents) == 0:
+        print("\n⚠️  문서를 로드할 수 없습니다!")
+        print("해결 방법: pip install openpyxl")
+        return
+    
+    # 3. 임베딩 생성
+    if not rag.build_embeddings():
+        return
+    
+    # 4. 매장 정보 및 진단 결과 출력
+    print("=" * 80)
     print("🏪 매장 정보")
     print("=" * 80)
     print(f"매장명: {modeling_data['store_name']}")
     print(f"업종: {modeling_data['industry']}")
     print(f"상권 특성: {modeling_data['analysis']['market_type_context']}")
-    print(f"\n최우선 문제: {modeling_data['analysis']['diagnosis_top3'][0]['약점']}")
-    print(f"심각도: {modeling_data['analysis']['diagnosis_top3'][0]['심각도']}/100")
-    print("=" * 80)
     
-    # 4. RAG 문서 검색 (동적)
+    print(f"\n📊 진단 결과 (12개 문제 유형 중 발견된 문제):")
+    for idx, issue in enumerate(modeling_data['analysis']['diagnosis_top3'], 1):
+        problem = issue['약점']
+        severity = issue['심각도']
+        solution = RAG3ConsultingSystem.PROBLEM_TYPES.get(problem, "맞춤 전략 필요")
+        
+        if idx == 1:
+            print(f"\n  🔴 {idx}순위: {problem} (심각도 {severity}/100) ⭐ 최우선")
+        else:
+            print(f"  🟠 {idx}순위: {problem} (심각도 {severity}/100)")
+        print(f"      → 기본 솔루션: {solution}")
+    
+    print("\n" + "=" * 80 + "\n")
+    
+    # 5. RAG 문서 검색
     top_issue = modeling_data['analysis']['diagnosis_top3'][0]
     
     relevant_docs = rag.search_documents(
@@ -368,37 +420,26 @@ def main():
         industry=modeling_data['industry'],
         store_name=modeling_data['store_name'],
         market_context=modeling_data['analysis']['market_type_context'],
-        top_k=3
+        top_k=2
     )
     
     if len(relevant_docs) == 0:
         print("❌ 관련 문서를 찾을 수 없습니다.")
         return
     
-    # 5. 웹페이지용 컨설팅 답변 생성
+    # 6. 컨설팅 답변 생성
     response = rag.generate_consulting_response(modeling_data, relevant_docs)
     
-    # 6. 결과 저장
-    if response:
-        try:
-            output_file = "consulting_response.txt"
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write("=" * 80 + "\n")
-                f.write("📋 컨설팅 답변\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(f"매장명: {modeling_data['store_name']}\n")
-                f.write(f"업종: {modeling_data['industry']}\n")
-                f.write(f"생성일: {pd.Timestamp.now()}\n\n")
-                f.write(f"최우선 해결 과제: {top_issue['약점']} (심각도 {top_issue['심각도']}/100)\n\n")
-                f.write("참고 문서:\n")
-                for doc in relevant_docs:
-                    f.write(f"  - [{doc['similarity']:.1f}%] {doc['file_name']}\n")
-                f.write("\n" + "=" * 80 + "\n\n")
-                f.write(response)
-            
-            print(f"\n📄 컨설팅 답변이 '{output_file}' 파일로 저장되었습니다.")
-        except Exception as e:
-            print(f"⚠️  파일 저장 오류: {str(e)}")
+    if not response:
+        print("❌ 컨설팅 답변 생성에 실패했습니다.")
+        return
+    
+    # 7. 결과 저장
+    rag.save_response(modeling_data, relevant_docs, response)
+    
+    print("\n" + "=" * 80)
+    print("✅ 모든 작업이 완료되었습니다!")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
