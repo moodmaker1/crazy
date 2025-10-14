@@ -239,47 +239,76 @@ elif st.session_state.step == "B_low":
     st.markdown("<h3 style='text-align:center;'>📉 재방문율이 30% 미만입니다</h3>", unsafe_allow_html=True)
     st.write("이에 대한 마케팅이 필요하신가요?")
     if st.button("마케팅 전략 아이디어 보기", use_container_width=True):
+        from analyzer.report_generator import generate_marketing_report
+
         with st.spinner("AI가 전략을 분석 중입니다..."):
-            result = generate_marketing_report(st.session_state.mct_id,"v2")
-        
+            result = generate_marketing_report(st.session_state.mct_id, mode="v2")
+
+        st.success("✅ 리포트 생성 완료!")
+
         # ----------------------
-        # 리턴 타입에 따른 분기 처리
+        # 예외 및 상태 분기 처리
         # ----------------------
         if "error" in result:
             st.error(result["error"])
 
         elif result.get("status") == "양호":
             st.markdown(f"""
-            <div class="card">
+            <div class="card" style="background:#f9fff9;border-left:4px solid #4CAF50;padding:1rem;">
                 <h4>🎉 {result['store_name']} ({result['store_code']})</h4>
                 <p>{result['message']}</p>
+                <ul>
+                    {"".join([f"<li><b>{k}</b>: {v}</li>" for k,v in result["current_status"].items()])}
+                </ul>
             </div>
             """, unsafe_allow_html=True)
 
         elif result.get("status") == "개선 필요":
             st.markdown(f"""
-            <div class="card">
+            <div class="card" style="border-left:4px solid #f44336;padding:1rem;">
                 <h4>🏪 {result['store_name']} ({result['store_code']})</h4>
-                <p><b>상권 유형:</b> {result['analysis']['type']}</p>
-                <p><b>재방문율:</b> {result['analysis']['revisit_rate']}</p>
-                <p><b>벤치마크 기준:</b> {result['analysis']['benchmark_type']}</p>
+                <p><b>상권 유형:</b> {result.get('market_type','-')}</p>
+                <p><b>재방문율:</b> {result['revisit_rate']:.2f}%</p>
+                <p><b>운영 개월:</b> {result['current_status']['운영개월']}개월</p>
                 <hr>
-                <h4>📊 주요 진단 요인</h4>
+                <h4>📊 현재 지표</h4>
+                <ul>
+                    {"".join([f"<li><b>{k}</b>: {v}</li>" for k,v in result["current_status"].items()])}
+                </ul>
             </div>
             """, unsafe_allow_html=True)
 
-            for d in result["analysis"]["diagnosis"]:
-                st.markdown(f"""
-                <div class="card">
-                    <p><b>{d['factor']}</b></p>
-                    <p>내 매장: {d['store_value']} | 업종 평균: {d['benchmark_value']} | 격차: {d['gap']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # --- 클러스터 기반 벤치마크 표시 ---
+            if result.get("benchmark"):
+                st.markdown("<h4>📈 벤치마크 비교</h4>", unsafe_allow_html=True)
+                for k, v in result["benchmark"].items():
+                    gap = result["gaps"].get(k, {}).get("gap", None) if result.get("gaps") else None
+                    if gap is not None:
+                        st.markdown(f"- **{k}**: 내 매장 {result['gaps'][k]['current']} / 벤치마크 {v} / 차이 {gap}")
+                    else:
+                        st.markdown(f"- **{k}**: {v}")
 
-            if result.get("recommendations"):
-                st.markdown("<h4>💡 추천 전략</h4>", unsafe_allow_html=True)
-                for rec in result["recommendations"]:
-                    st.markdown(f"- {rec}")
+            # --- 주요 차이 요약 ---
+            if result.get("gap_summary"):
+                st.info(result["gap_summary"])
+
+            # --- 전략 목록 ---
+            if result.get("strategies"):
+                st.markdown("<h4>💡 맞춤 전략 제안</h4>", unsafe_allow_html=True)
+                for s in result["strategies"]:
+                    st.markdown(f"""
+                    <div class="card" style="margin:0.5rem 0;padding:0.8rem;border:1px solid #ccc;border-radius:8px;">
+                        <p><b>[{s['priority']}] {s['category']} - {s['action']}</b></p>
+                        <p>{s['detail']}</p>
+                        <p><b>전술:</b> {", ".join(s['tactics'])}</p>
+                        <p><b>기대 효과:</b> {s['expected_impact']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                st.markdown(f"<p><b>총 전략 수:</b> {result.get('strategy_count', 0)}</p>", unsafe_allow_html=True)
+
+            else:
+                st.warning("⚠️ 생성된 전략이 없습니다. 데이터가 충분하지 않을 수 있습니다.")
 
         else:
             st.warning("⚠️ 분석 결과를 표시할 수 없습니다. 데이터 구조를 확인하세요.")
