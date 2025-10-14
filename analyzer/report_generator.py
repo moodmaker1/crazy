@@ -23,11 +23,7 @@ try:
     from experiments._2_final.report_generator2 import generate_marketing_report2
 
     # 2. 기존 baseline 모델 (generate_personal_reports.py)
-    from experiments.clusters_k4_baseline.scripts.generate_personal_reports import (
-        load_cluster_data,
-        load_feature_data,
-        generate_reports,
-    )
+    from experiments._1_final.report_generator import generate_marketing_report1
 
     from experiments._3_final.report_generator3 import generate_marketing_report3
 
@@ -54,27 +50,17 @@ def generate_marketing_report(mct_id: str, mode: str = "v2"):
     """
 
     try:
-        if mode == "v2":
+        if mode == "v1":
             # 최신 모델 (report_generator2)
+            return generate_marketing_report1(mct_id)
+        
+        if mode == "v2":
+            # 최신 모델 (report_generator2) 재방문율
             return generate_marketing_report2(mct_id)
         
         elif mode == "v3":
             # 최신 모델 (report_generator2)
             return generate_marketing_report3(mct_id)
-
-        elif mode == "baseline":
-            # 구버전 모델 (기존 클러스터 기반)
-            cluster_df = load_cluster_data("experiments/clusters_k4_baseline/outputs/latest_cluster/cluster_result.csv")
-            feature_df = load_feature_data("experiments/clusters_k4_baseline/data/processed/cafe_features_processed.csv")
-
-            merged = pd.merge(feature_df, cluster_df, on="ENCODED_MCT", how="left").set_index("ENCODED_MCT")
-
-            if mct_id not in merged.index:
-                return {"error": f"가맹점 ID '{mct_id}'를 찾을 수 없습니다."}
-
-            record = df_row_as_dict(merged, mct_id)
-            summary = summarize_report(record)
-            return {"mct_id": mct_id, "report": record, "summary": summary}
 
         elif mode == "timeseries":
             # 추가 예정: 시계열 기반 예측 모델
