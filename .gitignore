@@ -34,23 +34,7 @@ nohup.out
 # ==========================
 # 데이터 / 모델 아웃풋
 # ==========================
-data/
-*.csv
-*.xlsx
-*.xls
-*.parquet
-*.pkl
-*.pickle
-*.json
-*.feather
-*.zip
-*.gz
-*.tar
-*.tar.gz
-outputs/
-experiments/clusters_k4_baseline/outputs/
-experiments/clusters_k4_baseline/data/
-!experiments/clusters_k4_baseline/data/README.md
+
 
 # ==========================
 # Streamlit 관련
