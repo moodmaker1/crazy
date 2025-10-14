@@ -240,54 +240,49 @@ elif st.session_state.step == "B_low":
     st.write("이에 대한 마케팅이 필요하신가요?")
     if st.button("마케팅 전략 아이디어 보기", use_container_width=True):
         with st.spinner("AI가 전략을 분석 중입니다..."):
-            result = generate_marketing_report(st.session_state.mct_id,"v1")
+            result = generate_marketing_report(st.session_state.mct_id,"v2")
         
         # ----------------------
-        # 결과 분기 처리
+        # 리턴 타입에 따른 분기 처리
         # ----------------------
         if "error" in result:
             st.error(result["error"])
 
-        else:
-            st.success("✅ 전략 생성 완료!")
-
-            # 기본 매장 정보
+        elif result.get("status") == "양호":
             st.markdown(f"""
             <div class="card">
-                <h4>🏪 {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
-                <p><b>상태:</b> {result.get('status', '정보 없음')}</p>
-                <p><b>세부 설명:</b> {result.get('status_detail', '설명 없음')}</p>
+                <h4>🎉 {result['store_name']} ({result['store_code']})</h4>
+                <p>{result['message']}</p>
             </div>
             """, unsafe_allow_html=True)
 
-            # 분석 결과
-            if result.get("analysis"):
-                st.markdown("<h4>📊 분석 결과</h4>", unsafe_allow_html=True)
-                analysis = result["analysis"]
+        elif result.get("status") == "개선 필요":
+            st.markdown(f"""
+            <div class="card">
+                <h4>🏪 {result['store_name']} ({result['store_code']})</h4>
+                <p><b>상권 유형:</b> {result['analysis']['type']}</p>
+                <p><b>재방문율:</b> {result['analysis']['revisit_rate']}</p>
+                <p><b>벤치마크 기준:</b> {result['analysis']['benchmark_type']}</p>
+                <hr>
+                <h4>📊 주요 진단 요인</h4>
+            </div>
+            """, unsafe_allow_html=True)
 
-                if isinstance(analysis, dict):
-                    for key, val in analysis.items():
-                        st.markdown(f"- **{key}**: {val}")
-                else:
-                    st.markdown(f"{analysis}")
+            for d in result["analysis"]["diagnosis"]:
+                st.markdown(f"""
+                <div class="card">
+                    <p><b>{d['factor']}</b></p>
+                    <p>내 매장: {d['store_value']} | 업종 평균: {d['benchmark_value']} | 격차: {d['gap']}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-            # 추천 전략
             if result.get("recommendations"):
-                st.markdown("<h4>💡 추천 마케팅 전략</h4>", unsafe_allow_html=True)
-                recs = result["recommendations"]
+                st.markdown("<h4>💡 추천 전략</h4>", unsafe_allow_html=True)
+                for rec in result["recommendations"]:
+                    st.markdown(f"- {rec}")
 
-                if isinstance(recs, list):
-                    for rec in recs:
-                        st.markdown(f"- {rec}")
-                else:
-                    st.markdown(f"{recs}")
-
-            # 부가 정보
-            if result.get("metadata"):
-                meta = result["metadata"]
-                st.markdown("<h4>📎 참고 정보</h4>", unsafe_allow_html=True)
-                for k, v in meta.items():
-                    st.caption(f"{k}: {v}")
+        else:
+            st.warning("⚠️ 분석 결과를 표시할 수 없습니다. 데이터 구조를 확인하세요.")
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
     st.markdown("</div>", unsafe_allow_html=True)
