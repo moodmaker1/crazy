@@ -1,73 +1,77 @@
 """
 analyzer/report_generator.py
-AI 마케팅 분석 모델 통합 게이트웨이
+AI 마케팅 분석 모델 통합 게이트웨이 (RAG 통합 버전)
 ---------------------------------
-여러 모델 모듈을 import하고, mode 값에 따라 해당 함수를 실행하는 라우터 역할을 합니다.
 """
-
 import traceback
 import os
 import sys
 
-# -----------------------------------------
-# 경로 설정 (상위 경로 import 가능하게)
-# -----------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
-# -----------------------------------------
-# 모델 모듈 Import
-# -----------------------------------------
 try:
-    # 1. 최신 버전 (report_generator2)
-    from experiments._2_final.report_generator2 import generate_marketing_report2
-
-    # 2. 기존 baseline 모델 (generate_personal_reports.py)
+    from experiments._0_final.store_status import get_store_status_with_insights
     from experiments._1_final.report_generator import generate_marketing_report1
-
+    from experiments._2_final.report_generator2 import generate_marketing_report2
     from experiments._3_final.report_generator3 import generate_marketing_report3
-
+    from .rag_engine import generate_rag_summary  # ✅ RAG 모듈
 except ModuleNotFoundError as e:
     print(f"[Import Warning] 일부 모델 모듈을 불러오지 못했습니다: {e}")
 
-# -----------------------------------------
-# Analyzer 내부 유틸 (공통)
-# -----------------------------------------
-from .data_loader import load_cluster_df, load_feature_df
-from .utils import summarize_report, df_row_as_dict
 import pandas as pd
+from .utils import summarize_report, df_row_as_dict
 
 
-# -----------------------------------------
-# Report Router (Gateway)
-# -----------------------------------------
 def generate_marketing_report(mct_id: str, mode: str = "v2"):
     """
-    mode에 따라 다른 모델 모듈을 호출하는 통합 리포트 생성 함수.
-    - "v2": experiments/_2_final/report_generator2.py
-    - "baseline": experiments/clusters_k4_baseline/sripts/generate_personal_reports.py
-    - "timeseries": (추가 예정)
+    mode별로:
+    1️⃣ 내부 모델 실행 (기초 통계 or 분석 결과)
+    2️⃣ RAG 기반 요약 통합
     """
-
     try:
-        if mode == "v1":
-            # 최신 모델 (report_generator2)
-            return generate_marketing_report1(mct_id)
-        
-        if mode == "v2":
-            # 최신 모델 (report_generator2) 재방문율
-            return generate_marketing_report2(mct_id)
-        
+        # -----------------------------
+        # ① 내부 모델 실행
+        # -----------------------------
+        base_result = None
+        if mode == "v0":
+            base_result = get_store_status_with_insights(mct_id)
+            return base_result
+        elif mode == "v1":
+            base_result = generate_marketing_report1(mct_id)
+        elif mode == "v2":
+            base_result = generate_marketing_report2(mct_id)
         elif mode == "v3":
-            # 최신 모델 (report_generator2)
-            return generate_marketing_report3(mct_id)
+            base_result = generate_marketing_report3(mct_id)
 
-        elif mode == "timeseries":
-            # 추가 예정: 시계열 기반 예측 모델
-            return {"message": "시계열 기반 리포트는 현재 준비 중입니다."}
+        # -----------------------------
+        # ② RAG 기반 리포트 생성
+        # -----------------------------
+        rag_output = generate_rag_summary(mct_id, mode)
+        rag_text = rag_output.get("rag_summary", None)
 
-        else:
-            return {"error": f"지원되지 않는 모드: {mode}"}
+        # -----------------------------
+        # ③ 결과 합치기
+        # -----------------------------
+        result = {
+            "store_code": mct_id,
+            "mode": mode,
+            "rag_summary": rag_text,
+            "references": rag_output.get("references", {}),
+        }
+
+        # base_result에 매장 정보가 있을 경우 함께 포함
+        if isinstance(base_result, dict):
+            result.update({
+                "store_name": base_result.get("store_name", ""),
+                "status": base_result.get("status", ""),
+                "status_detail": base_result.get("status_detail", ""),
+                "analysis": base_result.get("analysis", ""),
+                "recommendations": base_result.get("recommendations", ""),
+                "metadata": base_result.get("metadata", {}),
+            })
+
+        return result
 
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc(limit=2)}

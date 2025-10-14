@@ -58,8 +58,10 @@ if st.session_state.step == "start":
 
 # ========== 2. [흐름 A] 카페 ==========
 elif st.session_state.step == "A_1":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.write("당신의 가맹점 코드를 입력해주세요.")
+    st.markdown("""
+        <div class="card welcome-card">
+            <h3>당신의 가맹점 코드를 입력해주세요.</h3>
+        """, unsafe_allow_html=True)
     st.session_state.mct_id = st.text_input("가맹점 ID", st.session_state.mct_id, placeholder="예: MCT12345")
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -69,18 +71,50 @@ elif st.session_state.step == "A_1":
     st.markdown("</div>", unsafe_allow_html=True)
 
 elif st.session_state.step == "A_2":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    mct_id = st.session_state.mct_id
+    if mct_id:
+        with st.spinner("매장 정보를 불러오는 중입니다..."):
+            info = generate_marketing_report(mct_id, mode="v0")
+
+        if "error" in info:
+            st.error(info["error"])
+        else:
+            # 매장 기본 정보 및 평가 표시
+            st.markdown(f"""
+            <div class="card" style="background:#f8fafc;padding:1.2rem;margin-bottom:1rem;">
+                <h4>🏪 {info.get('가맹점명','알 수 없음')} ({mct_id})</h4>
+                <p><b>운영기간:</b> {info.get('운영개월수','-')}개월</p>
+                <p><b>매출등급:</b> {info.get('최근1개월_매출액등급','-')}등급</p>
+                <p><b>재방문율:</b> {info.get('재방문고객비율','-')}%</p>
+                <p><b>신규고객비율:</b> {info.get('신규고객비율','-')}%</p>
+                <hr>
+                <p><b>🧩 운영 해석:</b> {info.get('운영기간_해석','')}</p>
+                <p><b>💰 매출 해석:</b> {info.get('매출등급_해석','')}</p>
+                <p><b>🔁 재방문 해석:</b> {info.get('재방문율_해석','')}</p>
+                <p><b>🆕 신규 고객:</b> {info.get('신규고객_해석','')}</p>
+                <p><b>🚚 배달 운영:</b> {info.get('배달_해석','')}</p>
+                <p><b>📈 성장성:</b> {info.get('성장성_해석','')}</p>
+                <p><b>👥 고객 분포:</b> {info.get('고객분포_해석','')}</p>
+                <hr>
+                <p><b>📊 종합 평가:</b> {info.get('종합평가','')}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.warning("가맹점 ID가 입력되지 않았습니다. 이전 단계로 돌아가 다시 입력해주세요.")
+
     st.markdown("<h3 style='text-align:center;'>어떤 전략을 추천받고 싶으세요?</h3>", unsafe_allow_html=True)
     st.button("🎯 고객 분석 및 마케팅 채널을 추천받고 싶어요!", use_container_width=True, on_click=lambda: go("A_3"))
     st.button("🔁 재방문율을 높이고 싶어요!", use_container_width=True, on_click=lambda: go("A_4"))
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("A_1"))
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 elif st.session_state.step == "A_3":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center;'>📢 고객 분석 및 마케팅 채널 추천</h3>", unsafe_allow_html=True)
-    st.write("AI가 고객 데이터를 기반으로 적합한 마케팅 채널과 문구를 제안합니다.")
-
+    st.markdown("""
+        <div class="card welcome-card">
+            <h3 style='text-align:center;'>📢 고객 분석 및 마케팅 채널 추천</h3></div>
+        """, unsafe_allow_html=True)
+    
     if st.button("마케팅 채널과 문구 생성", use_container_width=True):
         with st.spinner("AI가 고객 분석 중입니다..."):
             result = generate_marketing_report(st.session_state.mct_id, mode="v1")
@@ -89,12 +123,14 @@ elif st.session_state.step == "A_3":
         # 결과 분기 처리
         # ----------------------
         if "error" in result:
-            st.error(result["error"])
+            st.error(f"⚠️ 오류 발생: {result['error']}")
+            if "traceback" in result:
+                st.caption(result["traceback"])
 
         else:
-            st.success("✅ 분석 완료!")
+            st.success("✅ AI 마케팅 리포트 생성 완료!")
 
-            # 기본 매장 정보
+            # 기본 매장 정보 카드
             st.markdown(f"""
             <div class="card">
                 <h4>🏪 {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
@@ -103,16 +139,25 @@ elif st.session_state.step == "A_3":
             </div>
             """, unsafe_allow_html=True)
 
-            # 분석 요약 섹션
-            if result.get("analysis"):
-                st.markdown("<h4>📊 분석 결과</h4>", unsafe_allow_html=True)
-                analysis = result["analysis"]
+            # ----------------------
+            # ✅ RAG 기반 통합 리포트
+            # ----------------------
+            rag_summary = result.get("rag_summary", "")
+            if rag_summary:
+                st.markdown("<h4>🧠 AI 통합 마케팅 리포트</h4>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card'>{rag_summary}</div>", unsafe_allow_html=True)
+            else:
+                st.warning("💬 LLM 응답이 비어있습니다. 벡터DB나 API 키 설정을 확인해주세요.")
 
-                # dict일 경우 key-value 쌍 출력
+            # ----------------------
+            # 기존 분석 데이터 (선택적으로 표시)
+            # ----------------------
+            if result.get("analysis"):
+                st.markdown("<h4>📊 데이터 기반 분석</h4>", unsafe_allow_html=True)
+                analysis = result["analysis"]
                 if isinstance(analysis, dict):
                     for key, val in analysis.items():
                         st.markdown(f"- **{key}**: {val}")
-                # 문자열일 경우 그대로 출력
                 else:
                     st.markdown(f"{analysis}")
 
@@ -120,29 +165,33 @@ elif st.session_state.step == "A_3":
             if result.get("recommendations"):
                 st.markdown("<h4>💡 추천 마케팅 전략</h4>", unsafe_allow_html=True)
                 recs = result["recommendations"]
-
                 if isinstance(recs, list):
                     for rec in recs:
                         st.markdown(f"- {rec}")
                 else:
                     st.markdown(f"{recs}")
 
-            # 부가 정보
-            if result.get("metadata"):
-                meta = result["metadata"]
-                st.markdown("<h4>📎 참고 정보</h4>", unsafe_allow_html=True)
-                for k, v in meta.items():
-                    st.caption(f"{k}: {v}")
+            # 참고 데이터
+            refs = result.get("references", {})
+            if refs:
+                st.markdown("<h4>📎 참고 데이터 출처</h4>", unsafe_allow_html=True)
+                if refs.get("reports"):
+                    st.caption("📘 분석 참고 매장:")
+                    st.write(", ".join(refs["reports"]))
+                if refs.get("segments"):
+                    st.caption("🧩 마케팅 세그먼트:")
+                    st.write(", ".join(refs["segments"]))
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 elif st.session_state.step == "A_4":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center;'>🔁 재방문율 향상 전략</h3>", unsafe_allow_html=True)
-    st.write("이에 대한 마케팅이 필요하신가요?")
-
+    st.markdown("""
+        <div class="card welcome-card">
+            <h3 style='text-align:center;'>🔁 재방문율 향상 전략</h3></div>
+        """, unsafe_allow_html=True)
+    
     if st.button("마케팅 전략 리포트 생성", use_container_width=True):
         # ✅ 게이트웨이를 통해 호출 (경로 고정)
         from analyzer.report_generator import generate_marketing_report
@@ -220,24 +269,55 @@ elif st.session_state.step == "A_4":
             st.warning("⚠️ 분석 결과를 표시할 수 없습니다. 데이터 구조를 확인하세요.")
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
-
 
 
 # ========== 3. [흐름 B] 요식업 ==========
 elif st.session_state.step == "B_1":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.write("당신의 가맹점 코드를 입력해주세요.")
+    st.markdown("""
+        <div class="card welcome-card">
+            <h3>당신의 가맹점 코드를 입력해주세요.</h3></div>
+        """, unsafe_allow_html=True)
     st.session_state.mct_id = st.text_input("가맹점 ID", st.session_state.mct_id, placeholder="예: MCT98765")
     col1, col2 = st.columns([1, 1])
     with col1:
         st.button("다음으로", use_container_width=True, on_click=lambda: go("B_2"))
     with col2:
         st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 elif st.session_state.step == "B_2":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    mct_id = st.session_state.mct_id
+    if mct_id:
+        with st.spinner("매장 정보를 불러오는 중입니다..."):
+            info = generate_marketing_report(mct_id, mode="v0")
+
+        if "error" in info:
+            st.error(info["error"])
+        else:
+            # 매장 기본 정보 및 평가 표시
+            st.markdown(f"""
+            <div class="card" style="background:#f8fafc;padding:1.2rem;margin-bottom:1rem;">
+                <h4>🏪 {info.get('가맹점명','알 수 없음')} ({mct_id})</h4>
+                <p><b>운영기간:</b> {info.get('운영개월수','-')}개월</p>
+                <p><b>매출등급:</b> {info.get('최근1개월_매출액등급','-')}등급</p>
+                <p><b>재방문율:</b> {info.get('재방문고객비율','-')}%</p>
+                <p><b>신규고객비율:</b> {info.get('신규고객비율','-')}%</p>
+                <hr>
+                <p><b>🧩 운영 해석:</b> {info.get('운영기간_해석','')}</p>
+                <p><b>💰 매출 해석:</b> {info.get('매출등급_해석','')}</p>
+                <p><b>🔁 재방문 해석:</b> {info.get('재방문율_해석','')}</p>
+                <p><b>🆕 신규 고객:</b> {info.get('신규고객_해석','')}</p>
+                <p><b>🚚 배달 운영:</b> {info.get('배달_해석','')}</p>
+                <p><b>📈 성장성:</b> {info.get('성장성_해석','')}</p>
+                <p><b>👥 고객 분포:</b> {info.get('고객분포_해석','')}</p>
+                <hr>
+                <p><b>📊 종합 평가:</b> {info.get('종합평가','')}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.warning("가맹점 ID가 입력되지 않았습니다. 이전 단계로 돌아가 다시 입력해주세요.")
+
     st.markdown("<h3 style='text-align:center;'>어떤 전략을 추천받고 싶으세요?</h3>", unsafe_allow_html=True)
     mct_id = st.session_state.mct_id.strip()
     if not mct_id:
@@ -250,17 +330,16 @@ elif st.session_state.step == "B_2":
               on_click=lambda: go("B_high" if st.session_state.revisit_rate >= 30 else "B_low"))
     st.button("🧩 나의 매장의 문제를 파악하고 개선하고 싶어요!", use_container_width=True, on_click=lambda: go("B_problem"))
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("B_1"))
-    st.markdown("</div>", unsafe_allow_html=True)
 
 elif st.session_state.step == "B_high":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+
     st.markdown("<h3 style='text-align:center;'>🎉 축하드립니다!</h3>", unsafe_allow_html=True)
     st.write("재방문율이 **30% 이상**입니다! 이미 훌륭한 점포 운영 중이에요 👏")
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 elif st.session_state.step == "B_low":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+
     st.markdown("<h3 style='text-align:center;'>📉 재방문율이 30% 미만입니다</h3>", unsafe_allow_html=True)
     st.write("이에 대한 마케팅이 필요하신가요?")
     if st.button("마케팅 전략 아이디어 보기", use_container_width=True):
@@ -339,11 +418,14 @@ elif st.session_state.step == "B_low":
             st.warning("⚠️ 분석 결과를 표시할 수 없습니다. 데이터 구조를 확인하세요.")
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
 elif st.session_state.step == "B_problem":
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center;'>🧩 매장의 문제를 파악하고 개선하고 싶으세요?</h3>", unsafe_allow_html=True)
+    st.markdown("""
+        <div class="card welcome-card">
+            <h3 style='text-align:center;'>🧩 매장의 문제를 파악하고 개선하고 싶으세요?</h3>
+        """, unsafe_allow_html=True)
+    
     st.write("AI가 매장의 약점을 분석하고, 맞춤 전략을 제시합니다.")
 
     if st.button("문제 파악 및 전략 생성", use_container_width=True):
@@ -399,5 +481,5 @@ elif st.session_state.step == "B_problem":
 
     # 하단 버튼
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
-    st.markdown("</div>", unsafe_allow_html=True)
+    
 

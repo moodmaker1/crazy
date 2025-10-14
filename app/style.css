@@ -51,6 +51,7 @@
   /* ⭐ 중앙 정렬로 복원 */
   margin: 20px auto; 
   text-align: left; 
+  min-height: unset;   /* ✅ 추가 */
 }
 
 .card h3 {
