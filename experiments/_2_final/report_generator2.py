@@ -164,8 +164,11 @@ def generate_marketing_report2(store_code: str):
         result["status"] = "양호"
         result["message"] = f"재방문율이 {revisit_rate:.2f}%로 양호합니다. 개선 전략이 필요하지 않습니다."
         return result
+    else:
+        result["status"] = "개선 필요"
+        if "message" not in result:
+            result["message"] = "재방문율 개선이 필요한 상태입니다."
 
-    result["status"] = "개선 필요"
 
     # 유동형은 별도 전략 생성
     if market_type == '유동형':
