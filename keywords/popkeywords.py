@@ -127,7 +127,7 @@ def get_naver_search_trend(keywords_list, client_id, client_secret):
 
 # 메인 실행
 if __name__ == "__main__":
-    industry = "중식 딤섬"
+    industry = "카페"
 
     print("🔎 STEP 1: Gemini에서 키워드 30개 추천 중...")
     keywords = get_keywords_from_gemini(industry)
