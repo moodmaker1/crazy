@@ -4,7 +4,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from analyzer.report_generator import generate_marketing_report
 
-
 # ------------------------------
 # 기본 설정
 # ------------------------------
