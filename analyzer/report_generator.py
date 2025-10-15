@@ -1,5 +1,5 @@
 import traceback
-from analyzer.rag_engine_optimized import generate_rag_summary
+from analyzer.rag_engine import generate_rag_summary
 from experiments._1_final.report_generator import generate_marketing_report1
 from experiments._2_final.report_generator2 import generate_marketing_report2
 from experiments._3_final.report_generator3 import generate_marketing_report3
