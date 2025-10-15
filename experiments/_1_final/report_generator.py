@@ -488,6 +488,28 @@ def generate_marketing_report1(
     if trade_area is not None:
         analysis["trade_area"] = trade_area
 
+    # ----------------------------------------------------------------------
+    # ✅ Streamlit UI에서 표시할 요약 텍스트 생성
+    # ----------------------------------------------------------------------
+    insights_preview = analysis["insights"][:2]
+    insights_text = "\n".join([f"   • {i}" for i in insights_preview])
+    overview_text = f"""
+📍 **매장명:** {metadata.get('store_name', '-')}
+📊 **상태:** {status}
+💬 **요약:** {status_detail}
+
+👥 **핵심 고객 요약**
+{analysis.get('summary', '-')}
+
+🗺️ **상권 클러스터:** {analysis.get('cluster', '-')}
+
+💡 **주요 인사이트 (상위 2개)**
+{insights_text}
+""".strip()
+
+    # ----------------------------------------------------------------------
+    # ✅ 최종 반환
+    # ----------------------------------------------------------------------
     return {
         "store_code": store_code,
         "store_name": metadata.get("store_name"),
@@ -496,6 +518,7 @@ def generate_marketing_report1(
         "analysis": analysis,
         "recommendations": recommendations,
         "metadata": metadata,
+        "overview_text": overview_text,  # ✅ Streamlit 표출용 요약 텍스트
     }
 
 

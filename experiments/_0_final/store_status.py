@@ -197,6 +197,17 @@ def get_user_friendly_status(status: Dict[str, Any]) -> Dict[str, Any]:
     else:
         friendly['신규고객_해석'] = "신규 고객 유입이 적습니다. 마케팅 강화가 필요합니다."
 
+    # 객단가비율 해석
+    avg_price = status['객단가비율']
+    if avg_price >= 2.0:
+        friendly['객단가_해석'] = "고가 메뉴 위주로 운영 중입니다."
+    elif avg_price >= 1.5:
+        friendly['객단가_해석'] = "평균보다 높은 가격대입니다."
+    elif avg_price >= 0.8:
+        friendly['객단가_해석'] = "평균 가격대입니다."
+    else:
+        friendly['객단가_해석'] = "저가 메뉴 위주로 운영 중입니다."
+
     # 배달 운영 해석
     if status['배달여부']:
         delivery_ratio = status['배달매출비율']
