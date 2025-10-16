@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, re, html
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -47,6 +47,173 @@ def go(step: str):
 
 
 # =====================================================
+# ✅ RAG 하이라이트 파싱 & 포매팅
+# =====================================================
+HIGHLIGHT_LABELS = {
+    "channel": "📍 추천 채널",
+    "message": "💬 홍보 문구 예시",
+    "execution": "✅ 실행 방법",
+    "evidence": "📊 근거",
+}
+
+
+def _format_rag_text_block(value: str) -> str:
+    if not value:
+        return ""
+    lines = [line.strip() for line in value.splitlines()]
+    filtered = [line for line in lines if line]
+    if not filtered:
+        return ""
+
+    as_list = any(line.lstrip().startswith(("-", "•")) for line in filtered)
+    if as_list:
+        items = "".join(
+            f"<li>{html.escape(line.lstrip('-•').strip())}</li>"
+            for line in filtered
+        )
+        return f"<ul>{items}</ul>"
+    return "<br>".join(html.escape(line) for line in filtered)
+
+
+def extract_highlight_sections(summary: str):
+    if not summary:
+        return {}, summary
+
+    cleaned_text = summary
+    extracted = {}
+    for key, label in HIGHLIGHT_LABELS.items():
+        pattern = re.compile(
+            rf"(^|\n)[ \t]*{re.escape(label)}\s*[:：-]*\s*(.*?)(?=(\n[ \t]*[📍💬✅📊])|\n*$)",
+            re.S,
+        )
+
+        match = pattern.search(cleaned_text)
+        if not match:
+            continue
+
+        content = match.group(2).strip()
+        if content:
+            extracted[key] = content
+
+        def _replacement(m):
+            return "\n" if m.group(1) == "\n" else ""
+
+        cleaned_text = pattern.sub(_replacement, cleaned_text, count=1)
+
+    cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text).strip()
+    return extracted, cleaned_text
+
+
+def extract_action_cards(summary: str):
+    if not summary:
+        return [], summary
+
+    lines = summary.splitlines()
+    used = [False] * len(lines)
+
+    cards = []
+    heading = None
+    current_item = None
+    current_field = None
+
+    def mark_used(index: int):
+        if 0 <= index < len(used):
+            used[index] = True
+
+    def append_text(target: str, value: str):
+        return f"{target}\n{value}" if target else value
+
+    def flush_item():
+        nonlocal current_item, current_field
+        if current_item and (current_item.get("channel") or current_item.get("message")):
+            cards.append(
+                {
+                    "heading": heading or "",
+                    "title": current_item.get("title", ""),
+                    "channel": (current_item.get("channel") or "").strip(),
+                    "message": (current_item.get("message") or "").strip(),
+                    "execution": "\n".join(current_item.get("execution", [])).strip(),
+                    "evidence": "\n".join(current_item.get("evidence", [])).strip(),
+                }
+            )
+        current_item = None
+        current_field = None
+
+    i = 0
+    while i < len(lines):
+        original = lines[i]
+        stripped = original.strip()
+
+        if not stripped:
+            if current_item and current_field in {"channel", "message"}:
+                current_item[current_field] = append_text(current_item[current_field], "")
+                mark_used(i)
+            elif current_item and current_field in {"execution", "evidence"}:
+                current_item.setdefault(current_field, []).append("")
+                mark_used(i)
+            i += 1
+            continue
+
+        if stripped.startswith("[") and "]" in stripped[:6]:
+            flush_item()
+            heading = stripped
+            mark_used(i)
+            i += 1
+            continue
+
+        if re.match(r"\d+\.", stripped):
+            flush_item()
+            current_item = {
+                "title": stripped,
+                "channel": "",
+                "message": "",
+                "execution": [],
+                "evidence": [],
+            }
+            current_field = None
+            mark_used(i)
+            i += 1
+            continue
+
+        matched_label = False
+        for key, label in HIGHLIGHT_LABELS.items():
+            if stripped.startswith(label):
+                value = stripped[len(label):].strip(" :：-")
+                mark_used(i)
+                matched_label = True
+                current_field = key
+                if key in {"channel", "message"}:
+                    current_item[key] = append_text(current_item.get(key, ""), value)
+                else:
+                    bucket = current_item.setdefault(key, [])
+                    if value:
+                        bucket.append(value)
+                break
+
+        if matched_label:
+            i += 1
+            continue
+
+        if current_item and current_field:
+            mark_used(i)
+            if current_field in {"channel", "message"}:
+                current_item[current_field] = append_text(current_item[current_field], stripped)
+            else:
+                current_item.setdefault(current_field, []).append(stripped)
+            i += 1
+            continue
+
+        i += 1
+
+    flush_item()
+
+    remaining_lines = [lines[idx] for idx, flag in enumerate(used) if not flag]
+    remaining_summary = "\n".join(remaining_lines).strip()
+
+    return cards, remaining_summary
+
+
+# =====================================================
 # ✅ 공통 함수 1: AI 리포트 표시
 # =====================================================
 def display_ai_report(result: dict, title: str):
@@ -56,8 +223,7 @@ def display_ai_report(result: dict, title: str):
             st.caption(result["traceback"])
         return
 
-    # 기본 정보
-    st.markdown
+    # 기본 정보 섹션은 현재 비어 있어 제거
 
     # ✅ 키워드 트렌드 섹션 (RAG 이전에 표시)
     keyword_trend = result.get("keyword_trend", [])
@@ -76,7 +242,141 @@ def display_ai_report(result: dict, title: str):
     rag_summary = result.get("rag_summary")
     if rag_summary:
         st.markdown(f"<h4>{title}</h4>", unsafe_allow_html=True)
-        st.markdown(f"<div class='card'>{rag_summary}</div>", unsafe_allow_html=True)
+        action_cards, remaining_for_highlights = extract_action_cards(rag_summary)
+        highlight_sections, remaining_summary = extract_highlight_sections(remaining_for_highlights)
+
+        if action_cards:
+            for card in action_cards:
+                heading_html = html.escape(card.get("heading", ""))
+                title_html = html.escape(card.get("title", ""))
+
+                summary_blocks = []
+                channel_block = _format_rag_text_block(card.get("channel", ""))
+                message_block = _format_rag_text_block(card.get("message", ""))
+
+                if channel_block:
+                    summary_blocks.append(
+                        f"""
+                        <div class="highlight-card__item">
+                            <span class="highlight-card__label">📍 추천 채널</span>
+                            <div class="highlight-card__value">{channel_block}</div>
+                        </div>
+                        """
+                    )
+
+                if message_block:
+                    summary_blocks.append(
+                        f"""
+                        <div class="highlight-card__item">
+                            <span class="highlight-card__label">💬 홍보 문구 예시</span>
+                            <div class="highlight-card__value">{message_block}</div>
+                        </div>
+                        """
+                    )
+
+                details_blocks = []
+                exec_block = _format_rag_text_block(card.get("execution", ""))
+                evidence_block = _format_rag_text_block(card.get("evidence", ""))
+
+                if exec_block:
+                    details_blocks.append(
+                        f"""
+                        <div class="highlight-card__detail">
+                            <h5>✅ 실행 방법</h5>
+                            {exec_block}
+                        </div>
+                        """
+                    )
+
+                if evidence_block:
+                    details_blocks.append(
+                        f"""
+                        <div class="highlight-card__detail">
+                            <h5>📊 근거</h5>
+                            {evidence_block}
+                        </div>
+                        """
+                    )
+
+                highlight_html = f"""
+                <details class="highlight-card">
+                    <summary>
+                        <div class="highlight-card__heading">{heading_html}</div>
+                        <div class="highlight-card__summary-text">{title_html}</div>
+                        <div class="highlight-card__summary">
+                            {''.join(summary_blocks)}
+                        </div>
+                    </summary>
+                    {f'<div class="highlight-card__details">{"".join(details_blocks)}</div>' if details_blocks else ''}
+                </details>
+                """
+                st.markdown(highlight_html, unsafe_allow_html=True)
+
+        elif highlight_sections.get("channel") or highlight_sections.get("message"):
+            summary_blocks = []
+            channel_block = _format_rag_text_block(highlight_sections.get("channel", ""))
+            message_block = _format_rag_text_block(highlight_sections.get("message", ""))
+
+            if channel_block:
+                summary_blocks.append(
+                    f"""
+                    <div class="highlight-card__item">
+                        <span class="highlight-card__label">📍 추천 채널</span>
+                        <div class="highlight-card__value">{channel_block}</div>
+                    </div>
+                    """
+                )
+
+            if message_block:
+                summary_blocks.append(
+                    f"""
+                    <div class="highlight-card__item">
+                        <span class="highlight-card__label">💬 홍보 문구 예시</span>
+                        <div class="highlight-card__value">{message_block}</div>
+                    </div>
+                    """
+                )
+
+            details_blocks = []
+            exec_block = _format_rag_text_block(highlight_sections.get("execution", ""))
+            evidence_block = _format_rag_text_block(highlight_sections.get("evidence", ""))
+
+            if exec_block:
+                details_blocks.append(
+                    f"""
+                    <div class="highlight-card__detail">
+                        <h5>✅ 실행 방법</h5>
+                        {exec_block}
+                    </div>
+                    """
+                )
+
+            if evidence_block:
+                details_blocks.append(
+                    f"""
+                    <div class="highlight-card__detail">
+                        <h5>📊 근거</h5>
+                        {evidence_block}
+                    </div>
+                    """
+                )
+
+            highlight_html = f"""
+            <details class="highlight-card">
+                <summary>
+                    <div class="highlight-card__summary">
+                        {''.join(summary_blocks)}
+                    </div>
+                </summary>
+                {f'<div class="highlight-card__details">{"".join(details_blocks)}</div>' if details_blocks else ''}
+            </details>
+            """
+            st.markdown(highlight_html, unsafe_allow_html=True)
+
+        if remaining_summary:
+            st.markdown("<div class='card rag-summary'>", unsafe_allow_html=True)
+            st.markdown(remaining_summary)
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # 분석
     if result.get("analysis"):
@@ -346,7 +646,7 @@ elif st.session_state.step == "A_3":
 
         # RAG 버튼
         if st.button("🧠 마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
-            run_ai_report("v1")
+            run_ai_report("v1", "🧠 AI 마케팅 채널 & 홍보 전략 리포트")
     else:
         st.error(f"⚠️ {result.get('error', '오류가 발생했습니다.')}")
 

@@ -4,7 +4,7 @@
 
 /* ===== 전체 레이아웃 (유지) ===== */
 [data-testid="stAppViewContainer"] {
-  background-color: #f8fafc;
+  background: linear-gradient(180deg, #f1f6ff 0%, #f7fbff 60%, #ffffff 100%);
   font-family: "Hahmlet", sans-serif;
 }
 
@@ -19,9 +19,9 @@
 
 /* --- 헤더 --- */
 .header {
-  background: #ffffff;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.95), rgba(222, 236, 255, 0.95));
   border-radius: 15px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 15px 30px -25px rgba(38, 94, 163, 0.45);
   padding: 1.5em 2em;
   width: 90%;
   max-width: 850px; 
@@ -40,9 +40,10 @@
 
 /* ===== 카드 공통 (모든 단계의 카드) ===== */
 .card {
-  background: #ffffff;
+  background: rgba(247, 251, 255, 0.92);
   border-radius: 15px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 12px 28px -24px rgba(36, 99, 170, 0.4);
+  border: 1px solid rgba(180, 210, 245, 0.6);
   padding: 1.8em 2em;
   width: 90%;
   max-width: 850px; 
@@ -57,13 +58,13 @@
 
 /* --- 질문 카드 (start 단계) --- */
 .welcome-card {
-  background: linear-gradient(145deg, #f0f9ff, #e0f2fe);
-  border-left: 5px solid #fff3f1;
+  background: linear-gradient(160deg, rgba(226, 239, 255, 0.95), rgba(209, 231, 255, 0.95));
+  border-left: 5px solid rgba(149, 196, 255, 0.65);
   padding: 2em;
   margin-top: 20px;
   margin-bottom: 20px;
   border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 16px 32px -28px rgba(41, 98, 148, 0.55);
   margin: 20px auto;
   text-align: center;
 }
@@ -77,14 +78,14 @@
 .welcome-card h3 {
     margin: 0;
     font-size: 1.5em;
-    color: #0c4a6e;
+    color: #0f3d63;
     font-weight: 700;
     text-align: center;
 }
 
 .welcome-card p {
     font-size: 1.1em;
-    color: #374151;
+    color: #36526f;
     margin-top: 0.5rem;
     margin-bottom: 0;
 }
@@ -106,9 +107,9 @@ div[data-testid="stNumberInput"] {
 
 /* ===== 버튼 ===== */
 div.stButton > button {
-  background-color: white;
-  color: #1f2937;
-  border: 2px solid #c5e4ff;
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #1f2a44;
+  border: 2px solid rgba(161, 203, 255, 0.8);
   border-radius: 25px;
   padding: 0.6em 1.5em;
   font-weight: 600;
@@ -117,23 +118,23 @@ div.stButton > button {
 }
 
 div.stButton > button:hover {
-  background-color: #bbdfff;
-  color: white;
+  background-color: rgba(147, 198, 255, 0.88);
+  color: #0d2f54;
 }
 
 /* ===== 매장 정보 섹션 카드 ===== */
 .info-section {
-  background: #ffffff;
+  background: rgba(246, 250, 255, 0.95);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 10px 22px -24px rgba(31, 76, 135, 0.6);
   padding: 1.2rem 1.5rem;
   margin-bottom: 1rem;
-  border-left: 4px solid #9fd2ff;
+  border-left: 4px solid rgba(152, 197, 255, 0.85);
   transition: all 0.2s ease;
 }
 
 .info-section:hover {
-  box-shadow: 0 2px 8px rgba(75, 156, 226, 0.15);
+  box-shadow: 0 12px 26px -22px rgba(41, 91, 156, 0.55);
   transform: translateY(-1px);
 }
 
@@ -160,7 +161,7 @@ div.stButton > button:hover {
 }
 
 .info-section .insight {
-  color: #6b7280;
+  color: #4f6d91;
   font-size: 0.9em;
   font-style: italic;
   padding-left: 1.5rem;
@@ -181,18 +182,19 @@ div.stButton > button:hover {
 }
 
 .category-selection-wrapper div[data-testid^="stVerticalBlock"] {
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(171, 205, 244, 0.7);
     border-radius: 15px;
     padding: 1rem !important;
     text-align: center;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 18px 32px -28px rgba(46, 94, 150, 0.45);
+    background: rgba(247, 251, 255, 0.9);
 }
 
 .category-selection-wrapper div[data-testid^="stVerticalBlock"]:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-    border-color: #4b9ce2;
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px -26px rgba(44, 92, 155, 0.5);
+    border-color: rgba(122, 178, 240, 0.9);
     cursor: pointer;
 }
 
@@ -205,10 +207,171 @@ div.stButton > button:hover {
 }
 
 .category-selection-wrapper .stButton button {
-    background-color: #96ccff;
-    color: white;
+    background-color: rgba(144, 193, 255, 0.92);
+    color: #0d2f54;
     border: none;
     font-size: 1.1em;
     font-weight: 700;
     white-space: nowrap;
+}
+
+.category-selection-wrapper .stButton button:hover {
+    background-color: rgba(120, 176, 248, 0.92);
+    color: #06203b;
+}
+
+/* --- RAG 요약 카드 --- */
+.highlight-card {
+  background: linear-gradient(160deg, rgba(217, 235, 255, 0.95), rgba(231, 241, 255, 0.95));
+  border-radius: 18px;
+  border: 1px solid rgba(164, 199, 244, 0.65);
+  box-shadow: 0 22px 38px -30px rgba(34, 86, 148, 0.55);
+  padding: 0;
+  margin: 1.5rem auto 1rem auto;
+  width: 90%;
+  max-width: 860px;
+  overflow: hidden;
+}
+
+.highlight-card summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 1.7rem 2rem;
+  outline: none;
+  position: relative;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.highlight-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.highlight-card summary::after {
+  content: "자세히 보기 ⤵";
+  position: absolute;
+  right: 2rem;
+  top: 1.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0e3258;
+}
+
+.highlight-card[open] summary::after {
+  content: "접기 ⤴";
+}
+
+.highlight-card__heading {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #062f52;
+  letter-spacing: -0.01em;
+}
+
+.highlight-card__summary-text {
+  color: #1f2f44;
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.highlight-card__summary {
+  display: grid;
+  gap: 1.2rem;
+}
+
+@media (min-width: 768px) {
+  .highlight-card__summary {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+.highlight-card__item {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(179, 210, 249, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.highlight-card__label {
+  font-weight: 700;
+  color: #0d3561;
+  display: block;
+  margin-bottom: 0.6rem;
+  letter-spacing: -0.01em;
+}
+
+.highlight-card__value {
+  color: #1f2f46;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.highlight-card[open] summary {
+  border-bottom: 1px solid rgba(169, 205, 247, 0.55);
+  background: rgba(210, 230, 255, 0.45);
+}
+
+.highlight-card__details {
+  padding: 1.4rem 2rem 2rem 2rem;
+  background: rgba(244, 249, 255, 0.9);
+}
+
+.highlight-card__detail + .highlight-card__detail {
+  margin-top: 1rem;
+}
+
+.highlight-card__detail h5 {
+  margin: 0 0 0.6rem 0;
+  color: #0c3a64;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.highlight-card__detail ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #1c3148;
+}
+
+.highlight-card__detail ul li {
+  margin-bottom: 0.4rem;
+}
+
+.rag-summary.card {
+  background: rgba(244, 249, 255, 0.92);
+  border: 1px solid rgba(185, 214, 249, 0.6);
+  box-shadow: 0 18px 36px -30px rgba(33, 79, 133, 0.55);
+}
+
+/* --- Streamlit Alert (warning/info) --- */
+div[data-testid="stAlert"] {
+  background: rgba(226, 240, 255, 0.95) !important;
+  border: 1px solid rgba(147, 195, 248, 0.7) !important;
+  border-radius: 14px !important;
+  color: #0e3258 !important;
+  box-shadow: 0 18px 35px -30px rgba(33, 80, 135, 0.45);
+}
+
+div[data-testid="stAlert"] span,
+div[data-testid="stAlert"] p {
+  color: #0e3258 !important;
+}
+
+/* --- Chart Wrappers --- */
+div[data-testid="stPlotlyChart"],
+div[data-testid="stVegaLiteChart"],
+div[data-testid="stAltairChart"],
+div[data-testid="stPyplotChart"],
+div[data-testid="stDeckGlJsonChart"] {
+  background: rgba(247, 251, 255, 0.88);
+  border-radius: 18px;
+  border: 1px solid rgba(177, 210, 248, 0.55);
+  padding: 1rem;
+  box-shadow: 0 20px 38px -34px rgba(28, 71, 122, 0.55);
+}
+
+div[data-testid="stPlotlyChart"] canvas,
+div[data-testid="stAltairChart"] canvas {
+  border-radius: 14px;
 }
