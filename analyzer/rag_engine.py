@@ -13,7 +13,7 @@ import threading
 import time
 import numpy as np
 import faiss
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import google.generativeai as genai
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -85,6 +85,82 @@ def retrieve_similar_docs(index, metadata, query_vector: np.ndarray, top_k: int 
     results = [metadata[idx] for idx in I[0] if 0 <= idx < len(metadata)]
     print(f"⏱️ [retrieve_similar_docs] 검색 완료 ({time.time() - t0:.2f}s)")
     return results
+
+
+# ------------------------------------------------
+# (개선1) 쿼리문 구성: mct_id만 쓰지 말고 의미 있는 문장으로 확장
+# ------------------------------------------------
+def build_query_text(mct_id: str, mode: str) -> str:
+    """매장코드 단독 대신 의미적 쿼리문으로 확장하여 임베딩 품질 개선"""
+    # 모드별 검색 의도 문구 가미
+    intent = {
+        "v1": "고객 분석, 구매 패턴, 상권 특징, 채널 성과",
+        "v2": "재방문율, 리텐션, 영향 요인, 쿠폰/멤버십/푸시",
+        "v3": "핵심 문제점, 원인 분석, 마케팅 아이디어, 기대효과",
+    }.get(mode, "매장 분석, 마케팅 전략, 데이터 기반 인사이트")
+    return f"매장코드 {mct_id} 관련 {intent} 데이터와 유사 사례 요약"
+
+
+# ------------------------------------------------
+# (개선2) 보고서-세그먼트 정렬: 컨텍스트를 짝지어 배치
+# ------------------------------------------------
+def align_reports_with_segments(
+    report_docs: List[dict], segment_docs: List[dict], max_pairs: int = 5
+) -> List[Tuple[dict, dict, float]]:
+    """
+    상위 report/segment 결과를 임베딩 재계산으로 유사도 스코어링 후 매칭.
+    greedy로 높은 유사도부터 짝을 만들어 최대 max_pairs 페어 반환.
+    """
+    if not report_docs or not segment_docs or embedder is None:
+        return []
+
+    # 텍스트 추출
+    r_texts = [r.get("text", "")[:2000] for r in report_docs]  # 과도한 길이 방지
+    s_texts = [s.get("text", "")[:2000] for s in segment_docs]
+
+    # 임베딩
+    r_emb = embedder.encode(r_texts, normalize_embeddings=True)
+    s_emb = embedder.encode(s_texts, normalize_embeddings=True)
+
+    # 유사도 행렬 (cosine)
+    sim = np.matmul(r_emb, s_emb.T)  # (R x S)
+
+    pairs = []
+    used_r = set()
+    used_s = set()
+
+    # greedy 매칭
+    while len(pairs) < max_pairs:
+        # 아직 안 쓴 index들만 고려
+        mask = np.full_like(sim, -1e9)
+        for i in range(sim.shape[0]):
+            if i in used_r: continue
+            for j in range(sim.shape[1]):
+                if j in used_s: continue
+                mask[i, j] = sim[i, j]
+        i_max, j_max = np.unravel_index(np.argmax(mask), mask.shape)
+        if mask[i_max, j_max] < -1e8:
+            break  # 더 이상 매칭할 게 없음
+        score = float(sim[i_max, j_max])
+        pairs.append((report_docs[i_max], segment_docs[j_max], score))
+        used_r.add(i_max)
+        used_s.add(j_max)
+
+    return pairs
+
+
+# ------------------------------------------------
+# (개선3) 프롬프트 압축: 라인 단위 중복 제거
+# ------------------------------------------------
+def dedupe_lines(text: str) -> str:
+    lines = text.splitlines()
+    seen = set()
+    out = []
+    for ln in lines:
+        if ln not in seen:
+            seen.add(ln)
+            out.append(ln)
+    return "\n".join(out)
 
 
 # ------------------------------------------------
@@ -202,11 +278,13 @@ def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[
                 time.sleep(0.5)
         print(f"⏱️ [2] 임베딩 준비 시간: {time.time() - t1:.2f}s")
 
-        # 3️⃣ 쿼리 임베딩 생성
+        # 3️⃣ 쿼리 임베딩 생성 (개선: 의미 기반 쿼리문 사용)
         t2 = time.time()
-        query_emb = embedder.encode([mct_id], normalize_embeddings=True)
+        query_text = build_query_text(mct_id, mode)
+        query_emb = embedder.encode([query_text], normalize_embeddings=True)
         query_vector = np.array(query_emb, dtype=np.float32)
         print(f"⏱️ [3] 임베딩 생성 시간: {time.time() - t2:.2f}s")
+        print(f"🔎 [Query] {query_text}")
 
         # 4️⃣ 유사 문서 검색
         t3 = time.time()
@@ -214,14 +292,39 @@ def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[
         segment_results = retrieve_similar_docs(segments_index, segments_meta, query_vector, top_k)
         print(f"⏱️ [4] 검색 전체 시간: {time.time() - t3:.2f}s")
 
-        # 5️⃣ context 구성 및 프롬프트 생성
-        report_context = "\n\n".join([r.get("text", "") for r in report_results])
-        segment_context = "\n\n".join([r.get("text", "") for r in segment_results])
-        combined_context = f"[매장 분석 데이터]\n{report_context}\n\n[마케팅 전략 데이터]\n{segment_context}"
+        if not report_results and not segment_results:
+            return {"error": f"'{mct_id}' 관련 데이터를 찾을 수 없습니다."}
+
+        # 5️⃣ 컨텍스트 구성 (개선: 보고서-세그먼트 정렬 + 중복 제거)
+        pairs = align_reports_with_segments(report_results, segment_results, max_pairs=top_k)
+        if pairs:
+            # 페어 단위로 교차 배치 → 모델이 연관성을 더 잘 학습
+            blocks = []
+            for i, (r, s, sc) in enumerate(pairs, 1):
+                r_src = r.get("source", r.get("id", "reports"))
+                s_src = s.get("source", s.get("id", "segments"))
+                blocks.append(
+                    f"[매장 분석 데이터 #{i} | 출처: {r_src}]\n{r.get('text','')}\n\n"
+                    f"[연관 마케팅 전략 데이터 #{i} | 출처: {s_src} | 유사도: {sc:.3f}]\n{s.get('text','')}\n"
+                )
+            combined_context = "\n\n".join(blocks)
+        else:
+            # 페어링 실패 시 기존 방식으로 폴백
+            report_context = "\n\n".join([r.get("text", "") for r in report_results])
+            segment_context = "\n\n".join([r.get("text", "") for r in segment_results])
+            combined_context = f"[매장 분석 데이터]\n{report_context}\n\n[마케팅 전략 데이터]\n{segment_context}"
+
+        # 라인 중복 제거로 프롬프트 압축
+        before_len = len(combined_context)
+        combined_context = dedupe_lines(combined_context)
+        after_len = len(combined_context)
+        if after_len < before_len:
+            print(f"🧹 [Context Dedupe] {before_len} → {after_len} chars (-{before_len - after_len})")
+
         prompt = get_prompt_for_mode(mode, mct_id, combined_context)
         print(f"🧾 [Prompt Info] 글자 수: {len(prompt):,} / 예상 토큰 수: 약 {len(prompt)//4}")
 
-        # 6️⃣ Gemini 호출
+        # 6️⃣ Gemini 호출 (원본 유지)
         t4 = time.time()
         model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
