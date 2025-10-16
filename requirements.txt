@@ -70,7 +70,13 @@ tenacity==9.1.2
 threadpoolctl==3.6.0
 tokenizers==0.22.1
 toml==0.10.2
-torch==2.8.0
+
+# ✅ CPU 전용 Torch 버전 (GPU 모듈 제거)
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
+torchaudio==2.3.1+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 tornado==6.5.2
 tqdm==4.67.1
 transformers==4.57.0
@@ -80,3 +86,4 @@ tzdata==2025.2
 uritemplate==4.2.0
 urllib3==2.5.0
 xgboost==3.0.5
+sentencepiece
