@@ -80,3 +80,8 @@ config.yml
 experiments/tmp/
 experiments/dev_*/
 experiments/test_*/
+
+# ==========================
+# __의존성 리스트 바꾸지말것
+# ==========================
+requirements.txt
