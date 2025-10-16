@@ -28,9 +28,12 @@ Jinja2==3.1.4
 joblib==1.4.2
 jsonschema==4.23.0
 jsonschema-specifications==2024.10.1
+
+# ✅ markdown-it-py 3.0.0 이하로 고정 (rich 13.x 호환)
 markdown-it-py==3.0.0
-MarkupSafe==2.1.5
 mdurl==0.1.2
+
+MarkupSafe==2.1.5
 mpmath==1.3.0
 narwhals==2.8.0
 networkx==3.3
@@ -71,10 +74,10 @@ threadpoolctl==3.5.0
 tokenizers==0.20.0
 toml==0.10.2
 
-# ✅ CPU 전용 Torch 버전 (GPU 제거)
-torch==2.3.1+cpu
-torchvision==0.18.1+cpu
-torchaudio==2.3.1+cpu
+# ✅ CPU 전용 Torch 최신 안전버전 (보안패치 통과)
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+torchaudio==2.6.0+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 tornado==6.4.1
