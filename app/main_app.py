@@ -28,9 +28,17 @@ if "revisit_rate" not in st.session_state:
 # ------------------------------
 # 전역 헤더
 # ------------------------------
+# 로고 표시
+logo_path = "app/logo.png"
+if os.path.exists(logo_path):
+    _, col2, _ = st.columns([1, 2, 1])
+    with col2:
+        st.image(logo_path, use_column_width=True)
+
 st.markdown("""
     <div class="header">
-        <h2>👋 지피지기에 오신 것을 환영합니다!</h2>
+        <h2>내 가게를 부탁해</h2>
+        <p style="font-size: 1rem; color: #6b7280; margin-top: 0.5rem;">신한카드 AI 마케팅 프로젝트</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -49,13 +57,7 @@ def display_ai_report(result: dict, title: str):
         return
 
     # 기본 정보
-    st.markdown(f"""
-    <div class="card">
-        <h4>🏪 {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
-        <p><b>상태:</b> {result.get('status', '정보 없음')}</p>
-        <p><b>요약:</b> {result.get('message', '정보 없음')}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown
 
     # RAG 결과
     rag_summary = result.get("rag_summary")
@@ -207,21 +209,30 @@ def render_basic_info(mct_id: str):
 # 🏁 START
 # =====================================================
 if st.session_state.step == "start":
+
     st.markdown("""
         <div class="card welcome-card">
-            <h3>당신은 어떤 가게의 사장입니까?</h3>
+            <h3>'점포 분석 & 마케팅 전략에 특화된 AI가 여러분의 가게를 신속, 정확히 분석해 최고의 마케팅 전략을 제안합니다'</h3>
         </div>
     """, unsafe_allow_html=True)
+    st.markdown('<div class="category-selection-wrapper">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.button("☕ 카페", use_container_width=True,
+        if os.path.exists("app/1.png"):
+            st.image("app/1.png")
+        st.button("카페 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="카페"), go("A_1")])
     with col2:
-        st.button("🍽️ 요식업", use_container_width=True,
+        if os.path.exists("app/2.png"):
+            st.image("app/2.png")
+        st.button("요식업 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="요식업"), go("B_1")])
     with col3:
-        st.button("🚚 배달", use_container_width=True,
+        if os.path.exists("app/3.png"):
+            st.image("app/3.png")
+        st.button("배달 진단 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="배달"), go("C_1")])
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # =====================================================
@@ -321,7 +332,7 @@ elif st.session_state.step == "A_3":
 
         # RAG 버튼
         if st.button("🧠 마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
-            run_ai_report("v1", "🧠 AI 통합 마케팅 리포트")
+            run_ai_report("v1")
     else:
         st.error(f"⚠️ {result.get('error', '오류가 발생했습니다.')}")
 

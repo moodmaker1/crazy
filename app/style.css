@@ -1,9 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Hahmlet:wght@100..900&display=swap');
+
 /* style.css */
 
 /* ===== 전체 레이아웃 (유지) ===== */
 [data-testid="stAppViewContainer"] {
   background-color: #f8fafc;
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: "Hahmlet", sans-serif;
 }
 
 /* Streamlit 기본 블록 (유지) */
@@ -25,20 +27,16 @@
   max-width: 850px; 
   text-align: center;
   margin-top: 50px; 
-  /* ⭐ 중앙 정렬로 복원 */
   margin: 50px auto 20px auto; 
 }
-
 
 .header h2 {
   margin: 0;
   color: #1f2937;
   font-weight: 700;
   font-size: 1.6em;
-  /* ⭐ h2 텍스트 정렬 명시적으로 중앙 */
   text-align: center; 
 }
-
 
 /* ===== 카드 공통 (모든 단계의 카드) ===== */
 .card {
@@ -48,10 +46,9 @@
   padding: 1.8em 2em;
   width: 90%;
   max-width: 850px; 
-  /* ⭐ 중앙 정렬로 복원 */
   margin: 20px auto; 
   text-align: left; 
-  min-height: unset;   /* ✅ 추가 */
+  min-height: unset;
 }
 
 .card h3 {
@@ -60,46 +57,49 @@
 
 /* --- 질문 카드 (start 단계) --- */
 .welcome-card {
-  padding: 1.0em 2em; 
-  margin-top: 20px; 
-  margin-bottom: 20px; 
-  border-radius: 15px; 
+  background: linear-gradient(145deg, #f0f9ff, #e0f2fe);
+  border-left: 5px solid #fff3f1;
+  padding: 2em;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  border-radius: 15px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  /* ⭐ 중앙 정렬로 복원 */
-  margin: 20px auto; 
-  text-align: center; 
+  margin: 20px auto;
+  text-align: center;
+}
+
+.welcome-card .welcome-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 0.5rem;
 }
 
 .welcome-card h3 {
-    margin: 0; 
-    font-size: 1.4em; 
+    margin: 0;
+    font-size: 1.5em;
+    color: #0c4a6e;
+    font-weight: 700;
+    text-align: center;
 }
 
-/* --- 버튼 정렬 (start 단계 버튼) --- */
-div[data-testid="stHorizontalBlock"] {
-    max-width: 360px; 
-    width: 100%; 
-    margin: 0 auto;
-    padding-left: 0 !important; 
-    padding-right: 0 !important; 
+.welcome-card p {
+    font-size: 1.1em;
+    color: #374151;
+    margin-top: 0.5rem;
+    margin-bottom: 0;
 }
 
 /* --- 텍스트 입력 필드 정렬 보정 (A_1, B_1 단계 등) --- */
-/* Streamlit text_input, number_input 등을 포함하는 부모 요소 */
 div[data-testid="stTextInput"],
 div[data-testid="stNumberInput"] {
-    /* 텍스트 입력 필드 자체를 카드 폭에 맞게 넓히거나 정렬합니다. */
-    width: 100%; /* 카드 내부 전체 폭 사용 */
-    margin-bottom: 1rem; /* 간격 추가 */
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
 /* --- 일반 카드 내부 버튼 정렬 (A_1, B_1 단계 등) --- */
-/* 카드 내부의 st.columns로 생성된 버튼 블록 (col1, col2) */
-/* .card 내부의 stHorizontalBlock에만 적용되도록 범위를 좁힙니다. */
 .card div[data-testid="stHorizontalBlock"] {
-    /* start 단계 버튼 정렬과 구분하기 위해 max-width를 카드 폭에 가깝게 설정 */
-    max-width: 810px; /* 카드 내부 패딩을 제외한 폭 */
-    margin-top: 1.5rem; /* 입력 필드와의 간격 */
+    max-width: 810px;
+    margin-top: 1.5rem;
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
@@ -108,7 +108,7 @@ div[data-testid="stNumberInput"] {
 div.stButton > button {
   background-color: white;
   color: #1f2937;
-  border: 2px solid #4b9ce2;
+  border: 2px solid #c5e4ff;
   border-radius: 25px;
   padding: 0.6em 1.5em;
   font-weight: 600;
@@ -117,7 +117,7 @@ div.stButton > button {
 }
 
 div.stButton > button:hover {
-  background-color: #4b9ce2;
+  background-color: #bbdfff;
   color: white;
 }
 
@@ -128,7 +128,7 @@ div.stButton > button:hover {
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   padding: 1.2rem 1.5rem;
   margin-bottom: 1rem;
-  border-left: 4px solid #4b9ce2;
+  border-left: 4px solid #9fd2ff;
   transition: all 0.2s ease;
 }
 
@@ -171,3 +171,44 @@ div.stButton > button:hover {
 .grade-high { border-left-color: #10b981; }
 .grade-medium { border-left-color: #f59e0b; }
 .grade-low { border-left-color: #ef4444; }
+
+
+/* --- Category Selection Cards (Start Page) --- */
+.category-selection-wrapper div[data-testid="stHorizontalBlock"] {
+    gap: 1.5rem;
+    max-width: 850px;
+    margin: 0 auto; /* Center the block */
+}
+
+.category-selection-wrapper div[data-testid^="stVerticalBlock"] {
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    padding: 1rem !important;
+    text-align: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.category-selection-wrapper div[data-testid^="stVerticalBlock"]:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    border-color: #4b9ce2;
+    cursor: pointer;
+}
+
+.category-selection-wrapper img {
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    width: 100%;
+    object-fit: cover;
+    aspect-ratio: 1 / 1;
+}
+
+.category-selection-wrapper .stButton button {
+    background-color: #96ccff;
+    color: white;
+    border: none;
+    font-size: 1.1em;
+    font-weight: 700;
+    white-space: nowrap;
+}
