@@ -452,10 +452,33 @@ div.stButton > button:hover {
   padding: 1.3rem 1.6rem;
   cursor: pointer;
   outline: none;
+  position: relative;
 }
 
 .proposal-card summary::-webkit-details-marker {
   display: none;
+}
+
+/* 화살표 아이콘 추가 */
+.proposal-card summary::after {
+  content: "▼";
+  position: absolute;
+  right: 1.6rem;
+  top: 1.6rem;
+  font-size: 0.9rem;
+  color: #6366f1;
+  font-weight: 700;
+  transition: transform 0.3s ease;
+}
+
+/* 펼쳤을 때 화살표 회전 */
+.proposal-card[open] summary::after {
+  transform: rotate(180deg);
+}
+
+/* 호버 효과 */
+.proposal-card summary:hover::after {
+  color: #4f46e5;
 }
 
 .proposal-card__summary {
@@ -776,4 +799,9 @@ div[data-testid="stAltairChart"] canvas {
 .hero-description p {
   margin: 0;
   padding: 0.5rem 0;
+}
+
+.card.rag-summary {
+    white-space: pre-line;
+    line-height: 1.6;
 }

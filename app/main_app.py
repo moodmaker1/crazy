@@ -231,9 +231,18 @@ def clean_remaining_text(text: str) -> str:
             continue
         if re.match(r"\d+\.", stripped):
             continue
+        # 구분선(---, ===) 제거
+        if re.match(r"^[-=*]{3,}$", stripped):
+            continue
         filtered_lines.append(line)
 
-    return "\n".join(filtered_lines).strip()
+    result = "\n".join(filtered_lines).strip()
+
+    # 최소 10자 이상의 의미있는 텍스트만 반환
+    if len(result) < 10:
+        return ""
+
+    return result
 
 
 def extract_action_cards(summary: str):
@@ -276,7 +285,17 @@ def extract_action_cards(summary: str):
 
     def flush_item():
         nonlocal current_item, current_field
-        if current_item and (current_item.get("channel") or current_item.get("message")):
+        # v1: channel 또는 message 필요
+        # v2, v3: execution 또는 evidence 필요
+        has_content = (
+            current_item and (
+                current_item.get("channel") or
+                current_item.get("message") or
+                current_item.get("execution") or
+                current_item.get("evidence")
+            )
+        )
+        if has_content:
             cards.append(
                 {
                     "heading": heading or "",
@@ -307,23 +326,24 @@ def extract_action_cards(summary: str):
 
         normalized = stripped.lstrip("-•○* ").strip()
 
-        if normalized.startswith("[") and "]" in normalized[:6]:
+        # 숫자형 항목(1., 2. 등) 먼저 인식
+        if re.match(r"\d+\.", normalized):
+            flush_item()
+            start_new_item(normalized, heading)
+            mark_used(i)
+            i += 1
+            continue
+
+        # [단기 전략], [중기 전략], [장기 전략], [A], [B] 등 모든 섹션 헤더 인식
+        if normalized.startswith("[") and "]" in normalized:
             flush_item()
             heading = normalized
             mark_used(i)
             i += 1
             continue
 
-        # [A]/[B] 구분 헤더 인식 추가
-        if re.match(r"\[[A-Z]\]", normalized):
-            flush_item()
-            heading = normalized.strip()
-            mark_used(i)
-            i += 1
-            continue
-
-        # 숫자형 항목(1., 2. 등) 인식
-        if re.match(r"\d+\.", normalized):
+        # 레거시 지원: [A-Z] 단일 대문자 헤더도 계속 지원
+        if False:  # 위에서 이미 처리되므로 비활성화
             flush_item()
             start_new_item(normalized, heading)
             mark_used(i)
@@ -420,12 +440,13 @@ def display_ai_report(result: dict, title: str):
 
                 channel_items = _split_highlight_entries(card.get("channel", ""))
                 message_items = _split_highlight_entries(card.get("message", ""))
-                entry_count = max(len(channel_items), len(message_items))
-                if entry_count == 0:
-                    continue
-
                 exec_items = _split_highlight_entries(card.get("execution", ""))
                 evidence_items = _split_highlight_entries(card.get("evidence", ""))
+
+                # v1: channel/message 기반, v2/v3: execution/evidence 기반
+                entry_count = max(len(channel_items), len(message_items), 1 if exec_items or evidence_items else 0)
+                if entry_count == 0:
+                    continue
 
                 detail_sections = []
                 if exec_items:
@@ -448,41 +469,64 @@ def display_ai_report(result: dict, title: str):
 
                 title_html = html.escape(card.get("title", "").strip())
                 default_title = "추천 전략"
-                for idx in range(entry_count):
-                    channel_html = channel_items[idx] if idx < len(channel_items) else ""
-                    message_html = message_items[idx] if idx < len(message_items) else ""
 
-                    chips = []
-                    if channel_html:
-                        chips.append(f"**추천 채널**  \n{_strip_html_tags(channel_html)}")
-                    if message_html:
-                        chips.append(f"**홍보 문구 예시**  \n{_strip_html_tags(message_html)}")
+                # v1: channel/message 기반으로 여러 카드 생성
+                # v2/v3: execution/evidence 기반으로 단일 카드 생성
+                is_v1_mode = len(channel_items) > 0 or len(message_items) > 0
 
-                    chips_html = "<br><br>".join(chips)
-                                        
-                    
-                    
-                    
+                if is_v1_mode:
+                    # v1 모드: channel/message 기반 카드 생성
+                    for idx in range(entry_count):
+                        channel_html = channel_items[idx] if idx < len(channel_items) else ""
+                        message_html = message_items[idx] if idx < len(message_items) else ""
 
-                    summary_title = title_html or default_title
-                    if entry_count > 1:
-                        if title_html:
-                            summary_title = f"{title_html} #{idx + 1}"
-                        else:
-                            summary_title = f"{default_title} #{idx + 1}"
+                        chips = []
+                        if channel_html:
+                            chips.append(f"**추천 채널**  \n{_strip_html_tags(channel_html)}")
+                        if message_html:
+                            chips.append(f"**홍보 문구 예시**  \n{_strip_html_tags(message_html)}")
 
-                    card_html = f"""
-                    <details class="proposal-card">
-                        <summary>
-                            <div class="proposal-card__summary">
-                                <div class="proposal-card__heading">{summary_title}</div>
-                                <div class="proposal-card__chips">{chips_html}</div>
-                            </div>
-                        </summary>
-                        {detail_html}
-                    </details>
-                    """
-                    st.markdown(card_html, unsafe_allow_html=True)
+                        # 빈 카드 방지: chips가 없으면 스킵
+                        if not chips:
+                            continue
+
+                        chips_html = "<br><br>".join(chips)
+
+                        summary_title = title_html or default_title
+                        if entry_count > 1:
+                            if title_html:
+                                summary_title = f"{title_html} #{idx + 1}"
+                            else:
+                                summary_title = f"{default_title} #{idx + 1}"
+
+                        card_html = f"""
+                        <details class="proposal-card">
+                            <summary>
+                                <div class="proposal-card__summary">
+                                    <div class="proposal-card__heading">{summary_title}</div>
+                                    <div class="proposal-card__chips">{chips_html}</div>
+                                </div>
+                            </summary>
+                            {detail_html}
+                        </details>
+                        """
+                        st.markdown(card_html, unsafe_allow_html=True)
+                else:
+                    # v2/v3 모드: execution/evidence만 있는 경우, 단일 카드 생성
+                    if detail_html:
+                        summary_title = title_html or default_title
+
+                        card_html = f"""
+                        <details class="proposal-card" open>
+                            <summary>
+                                <div class="proposal-card__summary">
+                                    <div class="proposal-card__heading">{summary_title}</div>
+                                </div>
+                            </summary>
+                            {detail_html}
+                        </details>
+                        """
+                        st.markdown(card_html, unsafe_allow_html=True)
 
         elif highlight_sections.get("channel") or highlight_sections.get("message"):
             channel_items = _split_highlight_entries(highlight_sections.get("channel", ""))
@@ -511,54 +555,62 @@ def display_ai_report(result: dict, title: str):
             )
 
             entry_count = max(len(channel_items), len(message_items))
-            if entry_count == 0:
-                entry_count = 1
-            for idx in range(entry_count):
-                channel_html = channel_items[idx] if idx < len(channel_items) else ""
-                message_html = message_items[idx] if idx < len(message_items) else ""
-                chips = []
-                if channel_html:
-                    chips.append(
-                        f"""
-                        <div class="proposal-card__chip">
-                            <span class="proposal-card__label">추천 채널</span>
-                            <span class="proposal-card__value">{channel_html}</span>
-                        </div>
-                        """
-                    )
-                if message_html:
-                    chips.append(
-                        f"""
-                        <div class="proposal-card__chip">
-                            <span class="proposal-card__label">홍보 문구 예시</span>
-                            <span class="proposal-card__value">{message_html}</span>
-                        </div>
-                        """
-                    )
-                chips_html = "".join(chips)
+            # 빈 카드 방지: entry_count가 0이면 아예 카드를 생성하지 않음
+            if entry_count > 0:
+                for idx in range(entry_count):
+                    channel_html = channel_items[idx] if idx < len(channel_items) else ""
+                    message_html = message_items[idx] if idx < len(message_items) else ""
+                    chips = []
+                    if channel_html:
+                        chips.append(
+                            f"""
+                            <div class="proposal-card__chip">
+                                <span class="proposal-card__label">추천 채널</span>
+                                <span class="proposal-card__value">{channel_html}</span>
+                            </div>
+                            """
+                        )
+                    if message_html:
+                        chips.append(
+                            f"""
+                            <div class="proposal-card__chip">
+                                <span class="proposal-card__label">홍보 문구 예시</span>
+                                <span class="proposal-card__value">{message_html}</span>
+                            </div>
+                            """
+                        )
 
-                summary_title = "추천 제안"
-                if entry_count > 1:
-                    summary_title = f"추천 제안 #{idx + 1}"
+                    # 빈 카드 방지: chips가 없으면 스킵
+                    if not chips:
+                        continue
 
-                card_html = f"""
-                <details class="proposal-card">
-                    <summary>
-                        <div class="proposal-card__summary">
-                            <div class="proposal-card__heading">{summary_title}</div>
-                            <div class="proposal-card__chips">{chips_html}</div>
-                        </div>
-                    </summary>
-                    {detail_html}
-                </details>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
+                    chips_html = "".join(chips)
 
-        if remaining_summary:
-            cleaned_remaining = clean_remaining_text(remaining_summary)
-            if cleaned_remaining:
+                    summary_title = "추천 제안"
+                    if entry_count > 1:
+                        summary_title = f"추천 제안 #{idx + 1}"
+
+                    card_html = f"""
+                    <details class="proposal-card">
+                        <summary>
+                            <div class="proposal-card__summary">
+                                <div class="proposal-card__heading">{summary_title}</div>
+                                <div class="proposal-card__chips">{chips_html}</div>
+                            </div>
+                        </summary>
+                        {detail_html}
+                    </details>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+        # ✅ Fallback: 파싱 실패 시 원본 텍스트 표시
+        else:
+            # action_cards도 없고, highlight_sections도 없으면 원본 표시
+            if rag_summary and rag_summary.strip():
                 st.markdown("<div class='card rag-summary'>", unsafe_allow_html=True)
-                st.markdown(cleaned_remaining)
+                # 줄바꿈을 <br>로 치환하여 HTML 렌더링
+                formatted_summary = rag_summary.replace("\n", "<br>")
+                st.markdown(formatted_summary, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
     # 분석
@@ -617,89 +669,76 @@ def run_ai_report(mode: str, title: str):
         st.warning("가맹점 ID를 먼저 입력한 후 다시 시도해주세요.")
         return
 
-    image_candidates = [
-        "app/spinner1.png",
-        "app/spinner2.png",
-        "app/spinner3.png",
-    ]
-    available_images = [path for path in image_candidates if os.path.exists(path)]
+    spinner_path = "app/spinner1.png"
+    placeholder = st.empty()
 
-    status_placeholder = st.empty()
-    overlay_placeholder = st.empty()
-    status_placeholder.markdown("⏳ AI가 분석 중입니다...")
+    # 스피너 표시
+    if os.path.exists(spinner_path):
+        try:
+            with open(spinner_path, "rb") as f:
+                spinner_base64 = base64.b64encode(f.read()).decode("utf-8")
 
-    def _run_task():
-        return generate_marketing_report(mct_id, mode=mode)
-
-    try:
-        if not available_images:
-            with st.spinner("AI가 분석 중입니다..."):
-                result = _run_task()
-        else:
-            encoded_images = []
-            for path in available_images:
-                try:
-                    with open(path, "rb") as fp:
-                        encoded_images.append(
-                            f"data:image/png;base64,{base64.b64encode(fp.read()).decode()}"
-                        )
-                except Exception:
-                    continue
-
-            if not encoded_images:
-                with st.spinner("AI가 분석 중입니다..."):
-                    result = _run_task()
-            else:
-                spinner_style = """
-                <style>
-                .global-spinner-overlay {
+            placeholder.markdown(f"""
+            <style>
+                .spinner-overlay {{
                     position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    z-index: 9999;
-                    width: 90px;
-                    height: 90px;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(255, 255, 255, 0.85);
                     display: flex;
+                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    padding: 8px;
-                    border-radius: 50%;
-                    background: rgba(255, 255, 255, 0.9);
-                    box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.35);
-                }
-                .global-spinner-overlay img {
-                    width: 72px;
-                    height: 72px;
-                    object-fit: contain;
-                }
-                </style>
-                """
-                overlay_placeholder.markdown(spinner_style, unsafe_allow_html=True)
+                    z-index: 9999;
+                    animation: fadeIn 0.3s ease;
+                }}
+                .spinner-img {{
+                    width: 120px;
+                    height: 120px;
+                    animation: spin 2s linear infinite;
+                    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+                }}
+                .spinner-text {{
+                    font-size: 18px;
+                    font-weight: 500;
+                    color: #333;
+                    margin-top: 24px;
+                }}
+                @keyframes spin {{
+                    from {{ transform: rotate(0deg); }}
+                    to {{ transform: rotate(360deg); }}
+                }}
+                @keyframes fadeIn {{
+                    from {{ opacity: 0; }}
+                    to {{ opacity: 1; }}
+                }}
+            </style>
+            <div class="spinner-overlay">
+                <img src="data:image/png;base64,{spinner_base64}" class="spinner-img" alt="loading"/>
+                <p class="spinner-text">AI마케팅 셰프가 전략을 짜고 있습니다!</p>
+            </div>
+            """, unsafe_allow_html=True)
+        except Exception:
+            # 이미지 로드 실패 시 기본 spinner 사용
+            placeholder.empty()
+            with st.spinner("AI마케팅 셰프가 전략을 짜고 있습니다!."):
+                result = generate_marketing_report(mct_id, mode=mode)
+                placeholder.empty()
+                display_ai_report(result, title)
+                return
 
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_run_task)
-                    image_cycle = cycle(encoded_images)
-                    while not future.done():
-                        overlay_placeholder.markdown(
-                            f"""
-                            {spinner_style}
-                            <div class="global-spinner-overlay">
-                                <img src="{next(image_cycle)}" alt="loading">
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                        time.sleep(0.6)
-                    result = future.result()
+    # AI 리포트 생성
+    try:
+        result = generate_marketing_report(mct_id, mode=mode)
     except Exception as exc:
-        overlay_placeholder.empty()
-        status_placeholder.empty()
+        placeholder.empty()
         st.error(f"⚠️ 분석 도중 오류가 발생했습니다: {exc}")
         return
 
-    overlay_placeholder.empty()
-    status_placeholder.empty()
+    # 스피너 제거 및 결과 표시
+    placeholder.empty()
     display_ai_report(result, title)
 
 
@@ -724,7 +763,12 @@ def render_store_input(next_step: str):
             "image": "app/3.png",
             "heading": "배달 도입을 고민중이신가요?",
             "message": "매장의 운영 데이터를 AI가 정밀 분석해<br><strong>배달 도입시 성공,실패 예측 진단</strong>을 해드릴게요."
-        }
+        },
+        "분식": {
+            "image": "app/4.png",
+            "heading": "우리 분식집도 트렌드를 따라가야죠!",
+            "message": "매장의 운영 데이터를 AI가 정밀 분석해<br><strong>맞춤 채널 추천 및 홍보 문구</strong>를 작성해드려요."
+        },
     }
 
     if category in intro_map:
@@ -1040,7 +1084,7 @@ elif st.session_state.step == "A_3":
 
         # RAG 버튼
         if st.button("마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
-            run_ai_report("v1", "AI 마케팅 채널 & 홍보 전략 리포트")
+            run_ai_report("v1", "마케팅 채널 추천 & 홍보 문구")
     else:
         show_error_message(result)
 
@@ -1241,7 +1285,7 @@ elif st.session_state.step == "B_low":
                 """
                 <div class="callout-card callout-card--positive">
                     <h4>💡 AI가 제시하는 맞춤 전략을 확인해보세요</h4>
-                    <p>고객 재방문을 늘릴 수 있는 <b>단기·중기·장기 전략</b>이 자동 생성됩니다.</p>
+                    <p>고객 재방문을 늘릴 수 있는 단기*중기*장기 전략이 자동 생성됩니다.</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1249,7 +1293,7 @@ elif st.session_state.step == "B_low":
 
             # ✅ 버튼
             if st.button("AI 재방문율 향상 전략 보기", use_container_width=True):
-                run_ai_report("v2", "AI 재방문율 향상 전략 리포트")
+                run_ai_report("v2", "AI 재방문율 향상 전략 3가지")
         else:
             # 혼합형/양호 매장은 매장 약점 진단 추천
             st.markdown(
@@ -1319,18 +1363,7 @@ elif st.session_state.step == "B_problem":
                         unsafe_allow_html=True,
                     )
 
-        # 추천 전략 표시
-        if result.get("recommendations"):
-            st.markdown("<h4 class='center-heading'>💡 개선 전략</h4>", unsafe_allow_html=True)
-            for i, rec in enumerate(result["recommendations"], 1):
-                st.markdown(
-                    f"""
-                    <div class="card recommendation-card">
-                        <p><b>{i}. {rec}</b></p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+      
 
         # RAG 버튼
         st.markdown("<hr style='margin:2rem 0;'>", unsafe_allow_html=True)
@@ -1344,8 +1377,8 @@ elif st.session_state.step == "B_problem":
             unsafe_allow_html=True,
         )
 
-        if st.button("AI 상세 진단 리포트 생성 (RAG)", use_container_width=True):
-            run_ai_report("v3", "AI 약점 진단 및 개선 전략 리포트")
+        if st.button("AI 상세 진단 약점 개선 전략 (RAG)", use_container_width=True):
+            run_ai_report("v3", "AI 약점 진단 및 개선 전략")
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
