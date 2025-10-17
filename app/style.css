@@ -2,6 +2,17 @@
 
 /* style.css */
 
+:root {
+  --brand-primary: #3b82f6;
+  --brand-secondary: #6366f1;
+  --brand-accent: #22c55e;
+  --brand-warning: #f59e0b;
+  --brand-danger: #ef4444;
+  --brand-neutral: #1f2937;
+  --surface-base: rgba(247, 251, 255, 0.95);
+  --surface-strong: rgba(231, 241, 255, 0.9);
+}
+
 /* ===== 전체 레이아웃 (유지) ===== */
 [data-testid="stAppViewContainer"] {
   background: linear-gradient(180deg, #f1f6ff 0%, #f7fbff 60%, #ffffff 100%);
@@ -38,6 +49,13 @@
   text-align: center; 
 }
 
+.center-heading {
+  text-align: center;
+  margin: 1.2rem auto 1rem auto;
+  color: #0d2f54;
+  font-weight: 700;
+}
+
 /* ===== 카드 공통 (모든 단계의 카드) ===== */
 .card {
   background: rgba(247, 251, 255, 0.92);
@@ -54,6 +72,51 @@
 
 .card h3 {
     text-align: center;
+}
+
+.card--surface-light {
+  background: rgba(248, 250, 252, 0.95);
+  padding: 1.2rem;
+}
+
+.card--center {
+  text-align: center;
+}
+
+.card--compact {
+  padding: 0.8rem;
+}
+
+.stat-highlight {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f2b4a;
+}
+
+.stat-highlight--muted {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f3550;
+}
+
+.intro-card {
+  background: linear-gradient(135deg, rgba(244, 249, 255, 0.95), rgba(228, 236, 255, 0.95));
+  border-radius: 12px;
+  padding: 1.2rem 1.4rem;
+  box-shadow: 0 18px 32px -30px rgba(34, 71, 129, 0.35);
+  color: #1f2937;
+}
+
+.intro-card h3 {
+  margin: 0 0 0.6rem 0;
+  font-weight: 700;
+  color: #0f2b4a;
+}
+
+.intro-card p {
+  margin: 0;
+  line-height: 1.6;
+  color: #374151;
 }
 
 /* --- 질문 카드 (start 단계) --- */
@@ -220,6 +283,144 @@ div.stButton > button:hover {
     color: #06203b;
 }
 
+.accent-card {
+  background: rgba(247, 251, 255, 0.94);
+  border-radius: 12px;
+  border: 1px solid rgba(177, 210, 248, 0.6);
+  padding: 1.3rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 18px 34px -30px rgba(36, 82, 140, 0.32);
+}
+
+.accent-card h4 {
+  margin-top: 0;
+  color: #0d2f54;
+}
+
+.accent-card p {
+  color: #1f2f46;
+}
+
+.accent-card__body {
+  margin-top: 0.8rem;
+  line-height: 1.6;
+}
+
+.accent-card__note {
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+  color: #4b5970;
+}
+
+.accent-card--primary {
+  border-left: 5px solid var(--brand-primary);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.accent-card--secondary {
+  border-left: 5px solid var(--brand-secondary);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.accent-card--positive {
+  border-left: 5px solid var(--brand-accent);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.accent-card--warning {
+  border-left: 5px solid var(--brand-warning);
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.accent-card--muted {
+  border-left: 5px solid rgba(59, 76, 110, 0.2);
+  background: rgba(241, 246, 255, 0.88);
+}
+
+.status-card {
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-left: 6px solid var(--status-border, var(--brand-primary));
+  background: var(--status-bg, rgba(59, 130, 246, 0.12));
+  box-shadow: 0 20px 36px -30px rgba(33, 80, 135, 0.35);
+}
+
+.status-card h3 {
+  margin: 0;
+  color: var(--brand-neutral);
+}
+
+.status-card p {
+  margin: 0.5rem 0 0 0;
+  color: #4b5563;
+}
+
+.status-card__summary {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 0.8rem;
+  color: var(--brand-neutral);
+}
+
+.status-card__detail {
+  margin-top: 0.5rem;
+  color: #4b5563;
+}
+
+.status-card--positive {
+  --status-border: var(--brand-accent);
+  --status-bg: rgba(34, 197, 94, 0.14);
+}
+
+.status-card--info {
+  --status-border: var(--brand-primary);
+  --status-bg: rgba(59, 130, 246, 0.14);
+}
+
+.status-card--warning {
+  --status-border: var(--brand-warning);
+  --status-bg: rgba(245, 158, 11, 0.18);
+}
+
+.status-card--critical {
+  --status-border: var(--brand-danger);
+  --status-bg: rgba(239, 68, 68, 0.2);
+}
+
+.callout-card {
+  border-radius: 12px;
+  text-align: center;
+  padding: 1.2rem;
+  margin-top: 1rem;
+  border: 1px solid rgba(161, 203, 255, 0.6);
+  background: rgba(236, 248, 255, 0.95);
+  box-shadow: 0 18px 34px -30px rgba(36, 82, 140, 0.32);
+}
+
+.callout-card--positive {
+  border-color: rgba(167, 243, 208, 0.7);
+  background: rgba(236, 253, 245, 0.96);
+}
+
+.callout-card--muted {
+  border-color: rgba(193, 213, 249, 0.7);
+  background: rgba(242, 247, 255, 0.95);
+}
+
+.list-with-icon {
+  margin-top: 0.8rem;
+  padding-left: 1.4rem;
+}
+
+.list-with-icon li {
+  margin-bottom: 0.5rem;
+}
+
+.trend-list {
+  line-height: 1.8;
+  padding-left: 1.4rem;
+}
 /* --- RAG 요약 카드 --- */
 .highlight-card-surface {
   background: linear-gradient(160deg, rgba(217, 235, 255, 0.95), rgba(231, 241, 255, 0.95));
@@ -309,6 +510,68 @@ div[data-testid="stExpander"] .streamlit-expanderContent {
   background: rgba(244, 249, 255, 0.92);
   border: 1px solid rgba(185, 214, 249, 0.6);
   box-shadow: 0 18px 36px -30px rgba(33, 79, 133, 0.55);
+}
+
+.weakness-card {
+  background: #ffffff;
+  border-radius: 15px;
+  border-left: 4px solid var(--severity-color, var(--brand-primary));
+  padding: 1.2rem;
+  box-shadow: 0 18px 32px -28px rgba(38, 84, 142, 0.28);
+  margin-bottom: 1.1rem;
+}
+
+.weakness-card.severity-high {
+  --severity-color: var(--brand-danger);
+}
+
+.weakness-card.severity-medium {
+  --severity-color: var(--brand-warning);
+}
+
+.weakness-card.severity-low {
+  --severity-color: var(--brand-primary);
+}
+
+.weakness-card__bar {
+  background: #f3f4f6;
+  border-radius: 8px;
+  height: 20px;
+  overflow: hidden;
+  margin-top: 0.8rem;
+}
+
+.weakness-card__bar-fill {
+  background: var(--severity-color, var(--brand-primary));
+  height: 100%;
+  border-radius: 8px;
+}
+
+.recommendation-card {
+  background: rgba(236, 253, 245, 0.94);
+  border-left: 4px solid var(--brand-accent);
+}
+
+.reason-card {
+  border-left: 4px solid rgba(59, 130, 246, 0.5);
+  background: rgba(244, 249, 255, 0.9);
+}
+
+.reason-card--positive {
+  border-color: var(--brand-accent);
+}
+
+.reason-card--negative {
+  border-color: var(--brand-danger);
+}
+
+.reason-card--warning {
+  border-color: var(--brand-warning);
+}
+
+.reason-card__message {
+  margin-left: 1.5rem;
+  color: #4b5563;
 }
 
 /* --- Streamlit Alert (warning/info) --- */
