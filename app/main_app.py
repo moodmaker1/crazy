@@ -111,9 +111,32 @@ def _format_rag_text_block(value: str) -> str:
     return "<br>".join(html.escape(line) for line in filtered)
 
 
+def _strip_html_tags(text: str) -> str:
+    """HTML 태그를 제거하고 텍스트만 반환"""
+    if not text:
+        return ""
+    # HTML 태그 제거 (정규식 사용)
+    # <tag> 및 </tag> 형태 제거 (여러 번 실행하여 중첩된 태그도 제거)
+    cleaned = text
+    while re.search(r'<[^>]+>', cleaned):
+        cleaned = re.sub(r'<[^>]+>', '', cleaned)
+
+    # HTML 엔티티 디코드
+    cleaned = cleaned.replace('&quot;', '"').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+    cleaned = cleaned.replace('&nbsp;', ' ').replace('&apos;', "'")
+
+    # 연속된 공백 정리
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+
+    return cleaned.strip()
+
+
 def _split_highlight_entries(value: str):
     if not value:
         return []
+
+    # ✅ HTML 태그 제거
+    #value = _strip_html_tags(value)
 
     entries = []
     buffer = []
@@ -289,6 +312,15 @@ def extract_action_cards(summary: str):
             i += 1
             continue
 
+        # [A]/[B] 구분 헤더 인식 추가
+        if re.match(r"\[[A-Z]\]", normalized):
+            flush_item()
+            heading = normalized.strip()
+            mark_used(i)
+            i += 1
+            continue
+
+        # 숫자형 항목(1., 2. 등) 인식
         if re.match(r"\d+\.", normalized):
             flush_item()
             start_new_item(normalized, heading)
@@ -307,8 +339,8 @@ def extract_action_cards(summary: str):
                 label_variants.append(compact_label)
 
             for variant in label_variants:
-                # ✅ bullet point (•, -, ○, *) 제거 후 매칭
-                cleaned_for_match = stripped.lstrip("-•○* ").strip()
+                # ✅ HTML 태그 제거 후 bullet point (•, -, ○, *) 제거 후 매칭
+                cleaned_for_match = _strip_html_tags(stripped.lstrip("-•○* ").strip())
                 if cleaned_for_match.startswith(variant):
                     value = cleaned_for_match[len(variant):].lstrip(" :：-")
                     mark_used(i)
@@ -370,28 +402,7 @@ def display_ai_report(result: dict, title: str):
         rag_summary = re.sub(r"^\s*[#☕][^\n]*(\n|$)", "", rag_summary, count=1).strip()
         st.markdown(f"<h4>{title}</h4>", unsafe_allow_html=True)
 
-        # 🔍 디버깅: 파싱 전 요약 텍스트 확인
-        st.write(f"🔍 DEBUG: rag_summary 길이 = {len(rag_summary)}")
-        with st.expander("📄 RAG 원본 텍스트 보기"):
-            st.code(rag_summary)
-
         action_cards, remaining_for_highlights = extract_action_cards(rag_summary)
-
-        # 🔍 디버깅: 파싱된 카드 수 확인
-        st.write(f"🔍 DEBUG: action_cards 개수 = {len(action_cards)}")
-        if action_cards:
-            for i, card in enumerate(action_cards):
-                st.write(f"🔍 Card {i+1}:")
-                st.write(f"  - heading: {card.get('heading')}")
-                st.write(f"  - title: {card.get('title')[:80] if card.get('title') else 'None'}")
-                st.write(f"  - channel: {card.get('channel')[:80] if card.get('channel') else 'None'}")
-                st.write(f"  - message: {card.get('message')[:80] if card.get('message') else 'None'}")
-        else:
-            st.error("⚠️ action_cards가 비어있음! → 파싱 실패")
-            st.write(f"🔍 remaining_for_highlights 길이: {len(remaining_for_highlights)}")
-            with st.expander("📄 remaining 텍스트 보기"):
-                st.code(remaining_for_highlights[:1000])
-
         highlight_sections, remaining_summary = extract_highlight_sections(remaining_for_highlights)
 
         if action_cards:
@@ -441,24 +452,15 @@ def display_ai_report(result: dict, title: str):
 
                     chips = []
                     if channel_html:
-                            chips.append(
-                                f"""
-                                <div class="proposal-card__chip">
-                                    <span class="proposal-card__label">추천 채널</span>
-                                    <span class="proposal-card__value">{channel_html}</span>
-                                </div>
-                                """
-                            )
+                        chips.append(f"**추천 채널**  \n{_strip_html_tags(channel_html)}")
                     if message_html:
-                        chips.append(
-                            f"""
-                            <div class="proposal-card__chip">
-                                <span class="proposal-card__label">홍보 문구 예시</span>
-                                <span class="proposal-card__value">{message_html}</span>
-                            </div>
-                            """
-                        )
-                    chips_html = "".join(chips)
+                        chips.append(f"**홍보 문구 예시**  \n{_strip_html_tags(message_html)}")
+
+                    chips_html = "<br><br>".join(chips)
+                                        
+                    
+                    
+                    
 
                     summary_title = title_html or default_title
                     if entry_count > 1:
@@ -845,8 +847,8 @@ elif st.session_state.step == "A_2":
         st.warning("가맹점 ID를 입력해주세요.")
 
     st.markdown("<h3 class='center-heading'>어떤 전략을 추천받고 싶으세요?</h3>", unsafe_allow_html=True)
-    st.button("🎯 마케팅 채널 추천", use_container_width=True, on_click=lambda: go("A_3"))
-    st.button("🔁 재방문율 향상 전략", use_container_width=True, on_click=lambda: go("A_4"))
+    st.button("마케팅 채널 추천", use_container_width=True, on_click=lambda: go("A_3"))
+    st.button("재방문율 향상 전략", use_container_width=True, on_click=lambda: go("A_4"))
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("A_1"))
 
 elif st.session_state.step == "A_3":
@@ -943,8 +945,8 @@ elif st.session_state.step == "A_3":
         )
 
         # RAG 버튼
-        if st.button("🧠 마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
-            run_ai_report("v1", "🧠 AI 마케팅 채널 & 홍보 전략 리포트")
+        if st.button("마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
+            run_ai_report("v1", "AI 마케팅 채널 & 홍보 전략 리포트")
     else:
         show_error_message(result)
 
@@ -960,7 +962,7 @@ elif st.session_state.step == "A_4":
         unsafe_allow_html=True,
     )
     if st.button("AI 리포트 생성", use_container_width=True):
-        run_ai_report("v2", "🧠 AI 재방문율 향상 리포트")
+        run_ai_report("v2", " AI 재방문율 향상 리포트")
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
 
@@ -986,9 +988,9 @@ elif st.session_state.step == "B_2":
             st.session_state.revisit_rate = rate
 
             st.markdown("<h3 class='center-heading'>어떤 분석을 원하시나요?</h3>", unsafe_allow_html=True)
-            st.button("🔁 재방문율 향상 전략 보기", use_container_width=True,
+            st.button("재방문율 향상 전략 보기", use_container_width=True,
                       on_click=lambda: go("B_high" if rate >= 30 else "B_low"))
-            st.button("🧩 매장 문제 진단", use_container_width=True, on_click=lambda: go("B_problem"))
+            st.button("매장 문제 진단", use_container_width=True, on_click=lambda: go("B_problem"))
 
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("B_1"))
 
@@ -1152,8 +1154,8 @@ elif st.session_state.step == "B_low":
             )
 
             # ✅ 버튼
-            if st.button("🚀 AI 재방문율 향상 전략 보기", use_container_width=True):
-                run_ai_report("v2", "🧠 AI 재방문율 향상 전략 리포트")
+            if st.button("AI 재방문율 향상 전략 보기", use_container_width=True):
+                run_ai_report("v2", "AI 재방문율 향상 전략 리포트")
         else:
             # 혼합형/양호 매장은 매장 약점 진단 추천
             st.markdown(
@@ -1248,8 +1250,8 @@ elif st.session_state.step == "B_problem":
             unsafe_allow_html=True,
         )
 
-        if st.button("🧠 AI 상세 진단 리포트 생성 (RAG)", use_container_width=True):
-            run_ai_report("v3", "🧠 AI 약점 진단 및 개선 전략 리포트")
+        if st.button("AI 상세 진단 리포트 생성 (RAG)", use_container_width=True):
+            run_ai_report("v3", "AI 약점 진단 및 개선 전략 리포트")
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
