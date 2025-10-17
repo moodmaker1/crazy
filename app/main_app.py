@@ -11,6 +11,17 @@ st.set_page_config(page_title="지피지기 마케팅 리포트", layout="center
 with open("app/style.css", "r", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
+def debug_session_state():
+    st.sidebar.write("🧠 **Session Debug Info**")
+    st.sidebar.json({
+        "step": st.session_state.get("step"),
+        "mct_id": st.session_state.get("mct_id"),
+        "category": st.session_state.get("category"),
+    })
+
+debug_session_state()
+
+
 
 def set_global_background(image_path: str):
     if not os.path.exists(image_path):
@@ -44,16 +55,15 @@ set_global_background("app/back_3.png")
 
 
 # ------------------------------
-# 세션 초기화
+# 세션 초기화 (최초 1회만)
 # ------------------------------
-if "step" not in st.session_state:
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
     st.session_state.step = "start"
-if "mct_id" not in st.session_state:
     st.session_state.mct_id = ""
-if "category" not in st.session_state:
     st.session_state.category = None
-if "revisit_rate" not in st.session_state:
     st.session_state.revisit_rate = None
+
 
 
 # ------------------------------
@@ -645,20 +655,29 @@ def render_store_input(next_step: str):
                 unsafe_allow_html=True,
             )
 
-    st.markdown(
-        """
-        <div class="card welcome-card">
-            <h3>당신의 가맹점 코드를 입력해주세요.</h3>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-    st.session_state.mct_id = st.text_input("가맹점 ID", st.session_state.mct_id, placeholder="예: MCT12345")
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.button("다음으로", use_container_width=True, on_click=lambda: go(next_step))
-    with col2:
-        st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+    # ✅ 폼으로 묶기
+    with st.form("store_input_form", clear_on_submit=False):
+        st.markdown(
+            """
+            <div class="card welcome-card">
+                <h3>당신의 가맹점 코드를 입력해주세요.</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        mct_id_input = st.text_input(
+            "가맹점 ID",
+            value=st.session_state.get("mct_id", ""),
+            placeholder="예: MCT12345"
+        )
+
+        submitted = st.form_submit_button("다음으로", use_container_width=True)
+        if submitted:
+            st.session_state.mct_id = mct_id_input.strip()
+            go(next_step)
+
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
 
 # =====================================================
@@ -744,6 +763,34 @@ def render_basic_info(mct_id: str):
     #     </ul>
     # </div>
     # """, unsafe_allow_html=True)
+
+# =====================================================
+# ✅ 공통 함수 X: 에러 메시지 표시
+# =====================================================
+def show_error_message(result: dict):
+    """모든 리포트 공통 에러 출력 함수"""
+    error_msg = result.get("error", "오류가 발생했습니다.")
+    industry = result.get("industry", None)
+    store_code = result.get("store_code", None)
+
+    # 🟡 업종 미지원
+    if "업종" in error_msg and industry:
+        st.warning(f"⚠️ '{industry}' 업종은 현재 카페 전용 모델에서만 분석 가능합니다.")
+        st.info("☕ 카페, 커피전문점, 테마카페, 테이크아웃커피 업종만 지원됩니다.")
+        st.markdown("""
+        <div style="background:#f9fafb;padding:1rem;border-radius:10px;margin-top:1rem;">
+            💡 다른 분석을 원하신다면 <b>요식업</b> 또는 <b>배달</b> 탭에서 진행해주세요.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 🔴 매장 코드 없음
+    elif "매장을 찾을 수 없습니다" in error_msg:
+        st.error("❌ 입력하신 가맹점 코드를 찾을 수 없습니다.")
+        st.info("입력한 매장 ID가 정확한지 다시 확인해주세요. 예: `A2781768EE`")
+
+    # ⚪ 일반 예외
+    else:
+        st.error(f"⚠️ {error_msg}")
 
 
 # =====================================================
@@ -898,7 +945,7 @@ elif st.session_state.step == "A_3":
         if st.button("🧠 마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
             run_ai_report("v1", "🧠 AI 마케팅 채널 & 홍보 전략 리포트")
     else:
-        st.error(f"⚠️ {result.get('error', '오류가 발생했습니다.')}")
+        show_error_message(result)
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
