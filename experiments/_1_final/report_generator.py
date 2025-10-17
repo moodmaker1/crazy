@@ -415,7 +415,10 @@ def generate_marketing_report1(
     merged = _deduplicate_merchants(merged)
     target = merged.loc[merged["ENCODED_MCT"] == store_code]
     if target.empty:
-        raise KeyError(f"ENCODED_MCT '{store_code}'에 해당하는 매장을 찾을 수 없습니다.")
+        return {
+            "error": f"ENCODED_MCT '{store_code}'에 해당하는 매장을 찾을 수 없습니다.",
+            "store_code": store_code
+        }
 
     row = target.iloc[0]
     cluster_id = int(row["cluster"])
