@@ -277,7 +277,7 @@ def get_prompt_for_mode(mode: str, mct_id: str, combined_context: str) -> str:
 # ------------------------------------------------
 # RAG 리포트 생성
 # ------------------------------------------------
-def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[str, Any]:
+def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5, store_type: str = None) -> Dict[str, Any]:
     t_start = time.time()
     print(f"🚀 [RAG Triggered] mct_id={mct_id}, mode={mode}")
 
@@ -337,6 +337,14 @@ def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[
         combined_context = ""
         if persona_anchor:
             combined_context += persona_anchor + "\n"
+        # ✅ v3 모드일 때 업종 정보만 반영
+        if mode == "v3" and store_type:
+            combined_context += (
+                f"🏪 [매장 업종 정보]\n"
+                f"현재 매장은 '{store_type}' 업종(예: 포장마차, 분식점 등)에 해당합니다.\n"
+                "이 업종의 전형적인 영업 특성과 고객 행동 패턴을 고려하여 "
+                "문제를 진단하고 개선 전략을 제시하세요.\n\n"
+            )
         combined_context += (
             "[매장 주요 분석 및 고객층 강화 데이터]\n"
             + (report_context or "(데이터 없음)") + "\n\n"

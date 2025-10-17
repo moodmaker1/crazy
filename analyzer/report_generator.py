@@ -83,13 +83,25 @@ def generate_marketing_report(mct_id: str, mode: str = "v1", rag: bool = True):
         # --------------------------------------
         # ③ RAG + Keyword Trend 병렬 실행 (모든 모드 적용)
         # --------------------------------------
-        industry = base_result.get("업종분류") or get_industry_from_store(mct_id)
+        industry = (base_result.get("업종분류")or base_result.get("store_type")or get_industry_from_store(mct_id)or "기타")
+
+
+
+
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            futures = {
-                "rag": executor.submit(generate_rag_summary, mct_id, mode),
-                "trend": executor.submit(generate_keyword_trend_report, industry)
-            }
+            # ✅ v3일 때만 업종(store_type) 전달
+            if mode == "v3":
+                futures = {
+                    "rag": executor.submit(generate_rag_summary, mct_id, mode, 5, industry),
+                    "trend": executor.submit(generate_keyword_trend_report, industry)
+                }
+            else:
+                futures = {
+                    "rag": executor.submit(generate_rag_summary, mct_id, mode),
+                    "trend": executor.submit(generate_keyword_trend_report, industry)
+                }
+
             rag_output = futures["rag"].result()
             trend_output = futures["trend"].result()
 
