@@ -1,4 +1,6 @@
-import sys, os, re, html, base64
+import sys, os, re, html, base64, time
+from itertools import cycle
+from concurrent.futures import ThreadPoolExecutor
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -610,8 +612,94 @@ def display_ai_report(result: dict, title: str):
 # ✅ 공통 함수 2: AI 리포트 실행
 # =====================================================
 def run_ai_report(mode: str, title: str):
-    with st.spinner("AI가 분석 중입니다..."):
-        result = generate_marketing_report(st.session_state.mct_id, mode=mode)
+    mct_id = st.session_state.get("mct_id", "")
+    if not mct_id:
+        st.warning("가맹점 ID를 먼저 입력한 후 다시 시도해주세요.")
+        return
+
+    image_candidates = [
+        "app/spinner1.png",
+        "app/spinner2.png",
+        "app/spinner3.png",
+    ]
+    available_images = [path for path in image_candidates if os.path.exists(path)]
+
+    status_placeholder = st.empty()
+    overlay_placeholder = st.empty()
+    status_placeholder.markdown("⏳ AI가 분석 중입니다...")
+
+    def _run_task():
+        return generate_marketing_report(mct_id, mode=mode)
+
+    try:
+        if not available_images:
+            with st.spinner("AI가 분석 중입니다..."):
+                result = _run_task()
+        else:
+            encoded_images = []
+            for path in available_images:
+                try:
+                    with open(path, "rb") as fp:
+                        encoded_images.append(
+                            f"data:image/png;base64,{base64.b64encode(fp.read()).decode()}"
+                        )
+                except Exception:
+                    continue
+
+            if not encoded_images:
+                with st.spinner("AI가 분석 중입니다..."):
+                    result = _run_task()
+            else:
+                spinner_style = """
+                <style>
+                .global-spinner-overlay {
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    z-index: 9999;
+                    width: 90px;
+                    height: 90px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 8px;
+                    border-radius: 50%;
+                    background: rgba(255, 255, 255, 0.9);
+                    box-shadow: 0 18px 36px -24px rgba(15, 23, 42, 0.35);
+                }
+                .global-spinner-overlay img {
+                    width: 72px;
+                    height: 72px;
+                    object-fit: contain;
+                }
+                </style>
+                """
+                overlay_placeholder.markdown(spinner_style, unsafe_allow_html=True)
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_run_task)
+                    image_cycle = cycle(encoded_images)
+                    while not future.done():
+                        overlay_placeholder.markdown(
+                            f"""
+                            {spinner_style}
+                            <div class="global-spinner-overlay">
+                                <img src="{next(image_cycle)}" alt="loading">
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        time.sleep(0.6)
+                    result = future.result()
+    except Exception as exc:
+        overlay_placeholder.empty()
+        status_placeholder.empty()
+        st.error(f"⚠️ 분석 도중 오류가 발생했습니다: {exc}")
+        return
+
+    overlay_placeholder.empty()
+    status_placeholder.empty()
     display_ai_report(result, title)
 
 
