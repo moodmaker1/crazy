@@ -11,15 +11,15 @@ st.set_page_config(page_title="지피지기 마케팅 리포트", layout="center
 with open("app/style.css", "r", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-def debug_session_state():
-    st.sidebar.write("🧠 **Session Debug Info**")
-    st.sidebar.json({
-        "step": st.session_state.get("step"),
-        "mct_id": st.session_state.get("mct_id"),
-        "category": st.session_state.get("category"),
-    })
-
-debug_session_state()
+#def debug_session_state():
+#    st.sidebar.write("🧠 **Session Debug Info**")
+#    st.sidebar.json({
+#        "step": st.session_state.get("step"),
+#        "mct_id": st.session_state.get("mct_id"),
+#        "category": st.session_state.get("category"),
+#    })
+#
+#debug_session_state()
 
 
 
@@ -281,18 +281,6 @@ def display_ai_report(result: dict, title: str):
 
     # 기본 정보 섹션은 현재 비어 있어 제거
 
-    # ✅ 키워드 트렌드 섹션 (RAG 이전에 표시)
-    keyword_trend = result.get("keyword_trend", [])
-    industry = result.get("industry", "알 수 없음")
-    if keyword_trend:
-        st.markdown(f"<h4>📈 업종 트렌드 TOP10 ({industry}) - 검색량</h4>", unsafe_allow_html=True)
-        trend_html = "<ul style='line-height:1.8;'>"
-        for item in keyword_trend:
-            kw = item.get("keyword") or item.get("키워드") or "-"
-            val = item.get("value") or item.get("평균검색비율") or "-"
-            trend_html += f"<li>🔹 <b>{kw}</b> — {val}</li>"
-        trend_html += "</ul>"
-        st.markdown(f"<div class='card'>{trend_html}</div>", unsafe_allow_html=True)
 
     # RAG 결과
     rag_summary = result.get("rag_summary")
@@ -440,6 +428,20 @@ def display_ai_report(result: dict, title: str):
         if refs.get("segments"):
             segs = [f"{s.get('category','-')} / {s.get('segment','-')}" for s in refs["segments"]]
             st.markdown("🧩 **세그먼트:** " + ", ".join(segs))
+
+    
+    # ✅ 키워드 트렌드 섹션 (RAG 이후에 표시)
+    keyword_trend = result.get("keyword_trend", [])
+    industry = result.get("industry", "알 수 없음")
+    if keyword_trend:
+        st.markdown(f"<h4>📈 업종 트렌드 TOP10 ({industry}) - 검색량</h4>", unsafe_allow_html=True)
+        trend_html = "<ul style='line-height:1.8;'>"
+        for item in keyword_trend:
+            kw = item.get("keyword") or item.get("키워드") or "-"
+            val = item.get("value") or item.get("평균검색비율") or "-"
+            trend_html += f"<li>🔹 <b>{kw}</b> — {val}</li>"
+        trend_html += "</ul>"
+        st.markdown(f"<div class='card'>{trend_html}</div>", unsafe_allow_html=True)
 
 
 
