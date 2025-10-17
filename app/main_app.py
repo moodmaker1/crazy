@@ -85,6 +85,29 @@ def go(step: str):
 
 
 # =====================================================
+# ✅ 클러스터 요약 정보
+# =====================================================
+CLUSTER_SUMMARIES: dict[int, dict[str, str]] = {
+    0: {
+        "name": "방문형 매장",
+        "description": "활기찬 상권에서 여성 고객이 자주 찾고 매장 체류를 즐기는 방문형입니다.",
+    },
+    1: {
+        "name": "배달 친화형",
+        "description": "배달 주문이 활발해 단골을 꾸준히 모으는 배달 친화형입니다.",
+    },
+    2: {
+        "name": "초기 운영형",
+        "description": "오픈 초기로 신규 고객은 많지만 재방문이 자리 잡는 중인 단계입니다.",
+    },
+    3: {
+        "name": "단골 중심형",
+        "description": "단골 비중이 높아 꾸준히 안정감을 유지하는 매장형입니다.",
+    },
+}
+
+
+# =====================================================
 # ✅ RAG 하이라이트 파싱 & 포매팅
 # =====================================================
 HIGHLIGHT_LABELS = {
@@ -1044,12 +1067,33 @@ elif st.session_state.step == "A_3":
         summary = analysis.get('summary', '')
         cluster = analysis.get('cluster', '-')
 
+        cluster_id = None
+        if isinstance(cluster, (int, float)):
+            cluster_id = int(cluster)
+        elif isinstance(cluster, str):
+            try:
+                cluster_id = int(cluster.strip())
+            except ValueError:
+                cluster_id = None
+
+        cluster_meta = CLUSTER_SUMMARIES.get(cluster_id)
+        if cluster_meta:
+            cluster_title = f"{cluster_id} · {cluster_meta['name']}"
+            cluster_details = cluster_meta.get("description", "")
+        else:
+            cluster_title = cluster if cluster not in (None, "") else "-"
+            cluster_details = ""
+
+        cluster_title = html.escape(str(cluster_title))
+        cluster_details = html.escape(cluster_details) if cluster_details else ""
+
         st.markdown(
             f"""
             <div class="accent-card accent-card--primary">
                 <h4>👥 핵심 고객 요약</h4>
                 <p class="accent-card__body">{summary}</p>
-                <p class="accent-card__note">🗺️ 상권 클러스터: <b>{cluster}</b></p>
+                <p class="accent-card__note">🗺️ 상권 클러스터: <b>{cluster_title}</b></p>
+                {f'<p class="accent-card__note">{cluster_details}</p>' if cluster_details else ''}
             </div>
             """,
             unsafe_allow_html=True,
