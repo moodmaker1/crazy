@@ -818,7 +818,7 @@ def render_store_input(next_step: str):
         st.markdown(
             """
             <div class="card welcome-card">
-                <h3>당신의 가맹점 코드를 입력해주세요.</h3>
+                <h3>사장님의 가게 코드를 입력해주세요.</h3>
             </div>
             """,
             unsafe_allow_html=True,
@@ -849,67 +849,114 @@ def render_basic_info(mct_id: str):
         st.error(info["error"])
         return
 
-    # 카드 헤더
+    store_name = html.escape(str(info.get("가맹점명", "알 수 없음")))
+    industry = html.escape(str(info.get("업종분류", "-")))
+    address = html.escape(str(info.get("주소", "-")))
+
     st.markdown(
         f"""
         <div class="card card--surface-light">
-            <h4>🏪 {info.get('가맹점명','알 수 없음')} ({mct_id})</h4>
+            <h4>🏪 {store_name} <span class="card__mct-id">#{mct_id}</span></h4>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # 기본 정보
-    st.markdown(f"""
-    <div class="info-section">
-        <h4>📍 기본 정보</h4>
-        <ul>
-            <li><strong>업종:</strong> {info.get('업종분류', '-')}</li>
-            <li><strong>주소:</strong> {info.get('주소', '-')}</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="summary-pill-grid">
+            <div class="summary-pill">
+                <span class="summary-pill__icon"></span>
+                <div class="summary-pill__body">
+                    <span class="summary-pill__label">업종</span>
+                    <span class="summary-pill__value">{industry}</span>
+                </div>
+            </div>
+            <div class="summary-pill summary-pill--wide">
+                <span class="summary-pill__icon"></span>
+                <div class="summary-pill__body">
+                    <span class="summary-pill__label">주소</span>
+                    <span class="summary-pill__value summary-pill__value--long">{address}</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # 매출등급 (등급에 따라 색상 변경)
-    grade = info.get('최근1개월_매출액등급', 6)
-    grade_class = 'grade-high' if grade <= 2 else 'grade-medium' if grade <= 4 else 'grade-low'
+    grade_raw = info.get("최근1개월_매출액등급")
+    try:
+        grade_num = int(grade_raw)
+    except (TypeError, ValueError):
+        grade_num = None
 
-    st.markdown(f"""
-    <div class="info-section {grade_class}">
-        <h4>💰 매출등급</h4>
-        <ul>
-            <li><strong>매출등급:</strong> {grade}등급</li>
-            <li class="insight"> {info.get('매출등급_해석', '')}</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    if grade_num is not None:
+        if grade_num <= 2:
+            grade_tone = "grade-card--high"
+        elif grade_num <= 4:
+            grade_tone = "grade-card--medium"
+        else:
+            grade_tone = "grade-card--low"
+        grade_label = f"{grade_num}등급"
+    else:
+        grade_tone = "grade-card--unknown"
+        grade_label = "등급 정보 없음"
 
-    # 고객 지표 (주석처리)
-    # st.markdown(f"""
-    # <div class="info-section">
-    #     <h4>👥 고객 지표</h4>
-    #     <ul>
-    #         <li><strong>재방문율:</strong> {info.get('재방문고객비율', '-')}%</li>
-    #         <li class="insight">💬 {info.get('재방문율_해석', '')}</li>
-    #         <li><strong>신규고객:</strong> {info.get('신규고객비율', '-')}%</li>
-    #         <li class="insight">💬 {info.get('신규고객_해석', '')}</li>
-    #         <li><strong>객단가비율:</strong> {info.get('객단가비율', '-')}</li>
-    #         <li class="insight">💬 {info.get('객단가_해석', '')}</li>
-    #     </ul>
-    # </div>
-    # """, unsafe_allow_html=True)
+    grade_insight = html.escape(str(info.get("매출등급_해석", "")).strip())
+    grade_hint = (
+        "매출금액 구간은 전체 가맹점 대비 월 매출 순위를 6단계로 나눈 값이에요. "
+        "숫자가 낮을수록 상위 매장에 가깝습니다."
+    )
 
-    # 성장성
-    st.markdown(f"""
-    <div class="info-section">
-        <h4>📈 성장성</h4>
-        <ul>
-            <li><strong>업종 매출증감률:</strong> {info.get('업종매출증감률', 0):+.1f}%</li>
-            <li><strong>상권 매출증감률:</strong> {info.get('상권매출증감률', 0):+.1f}%</li>
-            <li class="insight"> {info.get('성장성_해석', '')}</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="grade-card {grade_tone}">
+            <div class="grade-card__header">
+                <span class="grade-card__icon">💰</span>
+                <span class="grade-card__title">매출 상태</span>
+            </div>
+            <p class="grade-card__value">{grade_label}</p>
+            {f'<p class="grade-card__desc">{grade_insight}</p>' if grade_insight else ''}
+            <p class="grade-card__hint">{grade_hint}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    def _to_float(value: object, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    industry_growth = _to_float(info.get("업종매출증감률", 0.0))
+    district_growth = _to_float(info.get("상권매출증감률", 0.0))
+    growth_insight = html.escape(str(info.get("성장성_해석", "")).strip())
+
+    st.markdown(
+        f"""
+        <div class="growth-card">
+            <div class="growth-card__header">
+                <span class="growth-card__icon"></span>
+                <div>
+                    <p class="growth-card__title">상권 성장성</p>
+                    {f'<p class="growth-card__summary">{growth_insight}</p>' if growth_insight else ''}
+                </div>
+            </div>
+            <div class="growth-card__stats">
+                <div class="growth-card__stat">
+                    <span class="growth-card__stat-label">업종 매출증감률</span>
+                    <span class="growth-card__stat-value">{industry_growth:+.1f}%</span>
+                </div>
+                <div class="growth-card__stat">
+                    <span class="growth-card__stat-label">상권 매출증감률</span>
+                    <span class="growth-card__stat-value">{district_growth:+.1f}%</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # 고객 거주지 분포 (주석처리)
     # st.markdown(f"""
@@ -963,7 +1010,7 @@ if st.session_state.step == "start":
         </div>
         <div class="hero-description">
             <p>
-                점포 분석 & 마케팅 전략에 특화된 AI가<br>
+                점포 분석 & 마케팅 전략에 특화된 AI셰프가<br>
                 여러분의 가게를 신속, 정확히 분석해 최고의 마케팅 전략을 제안합니다.
             </p>
         </div>
@@ -1119,8 +1166,8 @@ elif st.session_state.step == "A_3":
         st.markdown(
             """
             <div class="callout-card callout-card--positive">
-                <h4>💡 AI가 추천하는 상세 전략을 확인해보세요</h4>
-                <p><b>외식행태 경영실태 통계 보고서</b>를 참고한 <b>맞춤형 마케팅 전략</b>이 자동 생성됩니다.</p>
+                <h4>💡 AI셰프가 추천하는 상세 전략을 확인해보세요</h4>
+                <p><b>'외식행태 경영실태 통계 보고서'</b>를 참고한 <b>트렌드가 반영된 전략</b>이 자동 생성됩니다.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1328,8 +1375,8 @@ elif st.session_state.step == "B_low":
             st.markdown(
                 """
                 <div class="callout-card callout-card--positive">
-                    <h4>💡 AI가 제시하는 맞춤 전략을 확인해보세요</h4>
-                    <p>고객 재방문을 늘릴 수 있는 단기*중기*장기 전략이 자동 생성됩니다.</p>
+                    <h4>💡 AI셰프가 제시하는 맞춤 전략을 확인해보세요</h4>
+                    <p>고객 재방문을 늘릴 수 있는 단기·중기·장기 전략이 자동 생성됩니다.</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1359,7 +1406,7 @@ elif st.session_state.step == "B_problem":
     st.markdown(
         """
         <div class="card welcome-card">
-            <h3>🧩 매장 약점 및 개선 전략</h3>
+            <h3>매장 약점 및 개선 전략</h3>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1414,8 +1461,8 @@ elif st.session_state.step == "B_problem":
         st.markdown(
             """
             <div class="callout-card callout-card--positive">
-                <h4>💡 AI가 추천하는 상세 전략을 확인해보세요</h4>
-                <p><b>외식행태 경영실태 통계 보고서</b>를 참고한 <b>맞춤형 개선 전략</b>이 자동 생성됩니다.</p>
+                <h4>💡 AI셰프가 추천하는 상세 전략을 확인해보세요</h4>
+                <p><b>'외식행태 경영실태 통계 보고서'</b>를 참고한 <b>트렌드가 반영된 전략</b>이 자동 생성됩니다.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1442,7 +1489,7 @@ elif st.session_state.step == "C_2":
         st.markdown(
             """
             <div class="card welcome-card">
-                <h3>🚚 배달 도입 성공 예측</h3>
+                <h3>배달 도입 성공 예측</h3>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1455,6 +1502,8 @@ elif st.session_state.step == "C_2":
         if "error" in result:
             st.error(f"⚠️ {result['error']}")
         else:
+            feature_report = result.get("feature_report") or {}
+
             # 기본 정보
             st.markdown(
                 f"""
@@ -1471,9 +1520,78 @@ elif st.session_state.step == "C_2":
                 unsafe_allow_html=True,
             )
 
-            # 권장사항
-            st.markdown("<h4>💡 권장사항</h4>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card'>{result.get('message', '')}</div>", unsafe_allow_html=True)
+            # 핵심 진단
+            core_message = result.get('message')
+            interpret_text = result.get('interpret_text')
+            if core_message or interpret_text:
+                st.markdown("<h4>🎯 핵심 진단</h4>", unsafe_allow_html=True)
+                core_html = ""
+                if core_message:
+                    core_html += f"<p style='margin-bottom:0.6rem;'>{core_message}</p>"
+                if interpret_text:
+                    core_html += f"<p class='muted'>{interpret_text}</p>"
+                st.markdown(f"<div class='card'>{core_html}</div>", unsafe_allow_html=True)
+
+            # 실행 제안
+            recommendation = result.get('recommendation')
+            actions = feature_report.get('actions') or []
+            action_plan = feature_report.get('action_plan') or []
+            if recommendation or action_plan or actions:
+                st.markdown("<h4>🚀 실행 제안</h4>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card'>{recommendation or '가맹점 상황에 맞는 실행 전략을 검토하세요.'}</div>", unsafe_allow_html=True)
+                if action_plan:
+                    st.markdown("<div class='action-plan'>", unsafe_allow_html=True)
+                    for item in action_plan:
+                        badge = html.escape(item.get('step', 'Step'))
+                        title = html.escape(item.get('title', '실행 단계'))
+                        focus = html.escape(item.get('focus', '-'))
+                        action_text = html.escape(item.get('action', ''))
+                        status = item.get('status', 'neutral')
+                        status_class = f" action-plan__card--{status}"
+                        st.markdown(
+                            f"""
+                            <div class="action-plan__card{status_class}">
+                                <div class="action-plan__header">
+                                    <div class="action-plan__badge">{badge}</div>
+                                    <div class="action-plan__meta">
+                                        <div class="action-plan__title">{title}</div>
+                                        <div class="action-plan__focus">핵심 포인트: {focus}</div>
+                                    </div>
+                                </div>
+                                <div class="action-plan__action">{action_text}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    st.markdown("</div>", unsafe_allow_html=True)
+                elif actions:
+                    st.markdown(
+                        "<ul class='action-list'>"
+                        + "".join(f"<li>✅ {html.escape(action)}</li>" for action in actions)
+                        + "</ul>",
+                        unsafe_allow_html=True,
+                    )
+
+            # 진단 지표
+            metrics = feature_report.get('metrics') or {}
+            summary = feature_report.get('summary') or {}
+            if metrics:
+                st.markdown("<h4>진단 지표</h4>", unsafe_allow_html=True)
+                cols = st.columns(len(metrics))
+                for (label, value), col in zip(metrics.items(), cols):
+                    col.markdown(
+                        f"""
+                        <div class="metric-card">
+                            <div class="metric-card__label">{html.escape(label)}</div>
+                            <div class="metric-card__value">{value}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                if summary:
+                    st.caption(
+                        f"강점 {summary.get('strength_count', 0)}건 · 리스크 {summary.get('risk_count', 0)}건 · 점검항목 {summary.get('watch_count', 0)}건"
+                    )
 
             # 주요 근거
             reasons = result.get('reasons', [])
@@ -1503,6 +1621,8 @@ elif st.session_state.step == "C_2":
                         <div class="{reason_class}">
                             <p><b>{icon} {reason.get('factor', '-')}: {reason.get('value', '-')}</b></p>
                             <p class="reason-card__message">→ {reason.get('message', '')}</p>
+                            {f"<p class='reason-card__benchmark'>기준: {html.escape(reason.get('benchmark'))}</p>" if reason.get('benchmark') else ""}
+                            {f"<p class='reason-card__action'>실행 팁: {html.escape(reason.get('action'))}</p>" if reason.get('action') else ""}
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -1527,7 +1647,7 @@ elif st.session_state.step == "D_2":
     if not mct_id:
         st.warning("가맹점 ID를 입력해주세요.")
     else:
-        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>🍱 분식점 상태 분석 결과</h3></div>", unsafe_allow_html=True)
+        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>분식점 상태 분석 결과</h3></div>", unsafe_allow_html=True)
 
         with st.spinner("AI가 매장 상태를 분석 중입니다..."):
             result = store_lookup.fetch_store_status(mct_id)

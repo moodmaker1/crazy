@@ -1,5 +1,4 @@
 import traceback
-import concurrent.futures
 
 # -----------------------------
 # 내부 모듈 import
@@ -39,6 +38,7 @@ def generate_marketing_report(mct_id: str, mode: str = "v1", rag: bool = True):
     """
     try:
         base_result = None
+        raw_result = None
 
         # --------------------------------------
         # ① 내부 분석 라우팅
@@ -52,24 +52,25 @@ def generate_marketing_report(mct_id: str, mode: str = "v1", rag: bool = True):
         elif mode == "v3":
             base_result = generate_marketing_report3(mct_id)
         elif mode == "v4":
-            base_result = predict_delivery(mct_id)
-            if base_result is None:
+            raw_result = predict_delivery(mct_id)
+            if raw_result is None:
                 return {"error": "해당 가맹점을 찾을 수 없거나 이미 배달을 운영 중입니다."}
             # 배달 예측 리포트 포맷 정리
             base_result = {
-                "store_code": base_result.get("store_code"),
-                "store_name": base_result.get("store_name"),
-                "store_type": base_result.get("store_type"),
-                "district": base_result.get("district"),
-                "area": base_result.get("area"),
-                "emoji": base_result.get("emoji", "📦"),
-                "success_prob": base_result.get("success_prob", 0.0),
-                "fail_prob": 100 - base_result.get("success_prob", 0.0),
-                "status": base_result.get("level", "-"),
-                "message": base_result.get("summary", ""),
-                "recommendation": base_result.get("recommendation", ""),
-                "reasons": base_result.get("reasons", []),
-                "interpret_text": base_result.get("interpret_text", "")
+                "store_code": raw_result.get("store_code"),
+                "store_name": raw_result.get("store_name"),
+                "store_type": raw_result.get("store_type"),
+                "district": raw_result.get("district"),
+                "area": raw_result.get("area"),
+                "emoji": raw_result.get("emoji", "📦"),
+                "success_prob": raw_result.get("success_prob", 0.0),
+                "fail_prob": 100 - raw_result.get("success_prob", 0.0),
+                "status": raw_result.get("level", "-"),
+                "message": raw_result.get("summary", ""),
+                "recommendation": raw_result.get("recommendation", ""),
+                "reasons": raw_result.get("reasons", []),
+                "interpret_text": raw_result.get("interpret_text", ""),
+                "feature_report": raw_result.get("feature_report", {}),
             }
         else:
             return {"error": f"지원되지 않는 모드입니다: {mode}"}
@@ -81,7 +82,7 @@ def generate_marketing_report(mct_id: str, mode: str = "v1", rag: bool = True):
             return base_result
 
         # --------------------------------------
-        # ③ RAG + Keyword Trend 병렬 실행 (모든 모드 적용)
+        # ③ 업종 식별 (RAG/키워드 공통 입력)
         # --------------------------------------
         industry = (base_result.get("업종분류")or base_result.get("store_type")or get_industry_from_store(mct_id)or "기타")
 
@@ -89,27 +90,33 @@ def generate_marketing_report(mct_id: str, mode: str = "v1", rag: bool = True):
 
 
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            # ✅ v3일 때만 업종(store_type) 전달
-            if mode == "v3":
-                futures = {
-                    "rag": executor.submit(generate_rag_summary, mct_id, mode, 5, industry),
-                    "trend": executor.submit(generate_keyword_trend_report, industry)
-                }
-            else:
-                futures = {
-                    "rag": executor.submit(generate_rag_summary, mct_id, mode),
-                    "trend": executor.submit(generate_keyword_trend_report, industry)
-                }
+        # --------------------------------------
+        # ④ 키워드 트렌드 분석 → RAG 생성
+        #    (업종 키워드 기반으로 프롬프트에 최신 메뉴/콘셉트 반영)
+        # --------------------------------------
+        keyword_report = {}
+        keyword_top10 = []
+        try:
+            keyword_report = generate_keyword_trend_report(industry)
+            keyword_top10 = keyword_report.get("TOP10", []) or []
+        except Exception as e:
+            print(f"⚠️ 키워드 트렌드 생성 실패: {e}")
+            keyword_report = {"error": str(e), "TOP10": []}
 
-            rag_output = futures["rag"].result()
-            trend_output = futures["trend"].result()
+        rag_kwargs = {
+            "mct_id": mct_id,
+            "mode": mode,
+            "top_k": 5,
+            "keyword_top10": keyword_top10,
+        }
+        if mode in ("v2", "v3"):
+            rag_kwargs["store_type"] = industry
 
+        rag_output = generate_rag_summary(**rag_kwargs)
         rag_text = rag_output.get("rag_summary", "")
-        keyword_top10 = trend_output.get("TOP10", [])
 
         # --------------------------------------
-        # ④ 결과 병합
+        # ⑤ 결과 병합
         # --------------------------------------
         result = {
             "store_code": mct_id,
