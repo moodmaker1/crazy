@@ -902,7 +902,7 @@ if st.session_state.step == "start":
         </div>
     """, unsafe_allow_html=True)
     st.markdown('<div class="category-selection-wrapper">', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if os.path.exists("app/1.png"):
             st.image("app/1.png")
@@ -918,6 +918,12 @@ if st.session_state.step == "start":
             st.image("app/3.png")
         st.button("배달 진단 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="배달"), go("C_1")])
+        
+    with col4:
+        if os.path.exists("app/4.png"):
+            st.image("app/4.png")
+        st.button("분식 진단 셰프", use_container_width=True,
+                  on_click=lambda: [st.session_state.update(category="분식"), go("D_1")])
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1427,4 +1433,116 @@ elif st.session_state.step == "C_2":
 
     # 하단 버튼 유지
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("C_1"))
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+
+# =====================================================
+# 🍱 분식 플로우
+# =====================================================
+elif st.session_state.step == "D_1":
+    # 🏪 가맹점 입력 화면
+    render_store_input("D_2")
+
+elif st.session_state.step == "D_2":
+    from experiments._5_final import store_lookup
+
+    mct_id = st.session_state.mct_id.strip()
+
+    if not mct_id:
+        st.warning("가맹점 ID를 입력해주세요.")
+    else:
+        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>🍱 분식점 상태 분석 결과</h3></div>", unsafe_allow_html=True)
+
+        with st.spinner("AI가 매장 상태를 분석 중입니다..."):
+            result = store_lookup.fetch_store_status(mct_id)
+
+        if "error" in result:
+            st.error(f"⚠️ {result['error']}")
+        else:
+            st.markdown(f"""
+            <div class="card" style="background:#fff7ed;padding:1.2rem;border-left:6px solid #f97316;">
+                <h4>{result.get('emoji', '🏪')} {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
+                <p><b>상태 요약:</b> {result.get('status', '-')}</p>
+                <p style="margin-top:0.5rem;">{result.get('message', '')}</p>
+                <hr>
+                <h5>📊 주요 지표</h5>
+                <ul>
+                    <li>재방문 고객 비율: {result.get('metrics', {}).get('revisit_ratio', '-')}%</li>
+                    <li>신규 고객 비율: {result.get('metrics', {}).get('new_ratio', '-')}%</li>
+                    <li>거주 고객 비율: {result.get('metrics', {}).get('resident_ratio', '-')}%</li>
+                    <li>직장 고객 비율: {result.get('metrics', {}).get('office_ratio', '-')}%</li>
+                    <li>유동 고객 비율: {result.get('metrics', {}).get('floating_ratio', '-')}%</li>
+                    <li>배달 고객 비율: {result.get('metrics', {}).get('delivery_ratio', '-')}%</li>
+                    <li>충성도 점수: {result.get('metrics', {}).get('loyalty_score', '-')}</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 게시글 생성 버튼
+            st.markdown("<p style='text-align:center;margin-top:1.2rem;'>👇 AI 홍보 게시글을 생성하려면 아래 버튼을 눌러주세요</p>", unsafe_allow_html=True)
+            st.button("📣 AI 홍보 게시글 생성", use_container_width=True, on_click=lambda: go("D_3"))
+
+    # 하단 버튼
+    st.button("← 이전으로", use_container_width=True, on_click=lambda: go("D_1"))
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+
+
+elif st.session_state.step == "D_3":
+    from experiments._5_final import store_lookup
+
+    mct_id = st.session_state.mct_id.strip()
+
+    if not mct_id:
+        st.warning("가맹점 ID를 입력해주세요.")
+    else:
+        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>📢 분식점 홍보 게시글</h3></div>", unsafe_allow_html=True)
+
+        with st.spinner("AI가 홍보 게시글을 생성 중입니다..."):
+            result = store_lookup.fetch_store_marketing(mct_id)
+
+        if "error" in result:
+            st.error(f"⚠️ {result['error']}")
+        else:
+            posts = result.get("marketing_posts", [])
+            if not posts:
+                st.info("게시글 데이터가 없습니다.")
+            else:
+                for post in posts:
+                    st.markdown(f"### 📢 {post.get('channel', '채널 미상')} - {post.get('title', '제목 없음')}")
+                    st.markdown(post.get("copy", ""))
+
+                    # 🎯 행동 문장 추천
+                    call_to_actions = post.get("call_to_actions", {})
+                    if isinstance(call_to_actions, dict) and call_to_actions:
+                        with st.expander("🎯 행동 문장 추천"):
+                            for k, v in call_to_actions.items():
+                                st.write(f"**{k}**: {v}")
+
+                    # 💡 인사이트
+                    insights = post.get("insights", [])
+                    if isinstance(insights, (list, tuple)) and insights:
+                        with st.expander("💡 인사이트"):
+                            for insight in insights:
+                                st.write(f"- {insight}")
+
+                    # 🖼️ 마케팅 소재 아이디어
+                    assets = post.get("assets", {})
+                    if isinstance(assets, dict) and assets:
+                        with st.expander("🖼️ 마케팅 소재 아이디어"):
+                            photo_ideas = assets.get("photo_ideas")
+                            hashtags = assets.get("hashtags")
+                            location_tag = assets.get("location_tag")
+
+                            # 각 키가 있을 때만 출력
+                            if isinstance(photo_ideas, (list, tuple)) and photo_ideas:
+                                st.write("**추천 사진 아이디어:**", ", ".join(photo_ideas))
+                            if isinstance(hashtags, (list, tuple)) and hashtags:
+                                st.write("**해시태그:**", ", ".join(hashtags))
+                            if isinstance(location_tag, str) and location_tag.strip():
+                                st.write("**위치 태그:**", location_tag)
+
+                    st.markdown("---")
+
+
+    # 하단 버튼
+    st.button("← 이전으로", use_container_width=True, on_click=lambda: go("D_2"))
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
