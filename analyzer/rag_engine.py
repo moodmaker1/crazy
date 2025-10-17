@@ -3,6 +3,7 @@ rag_engine.py
 -------------
 Gemini-2.5-Flash + FAISS 기반 RAG 엔진
 - 주 고객층 강화 전략 + 유사매장 타겟 확장 전략 병합형 분석
+- 현재 매장 페르소나(summary/persona 등)를 프롬프트 컨텍스트 최상단에 앵커로 삽입
 """
 
 import os
@@ -19,7 +20,7 @@ from sentence_transformers import SentenceTransformer
 import multiprocessing
 
 # ------------------------------------------------
-# ✅ 병렬 설정
+# ✅ 병렬/성능 설정
 # ------------------------------------------------
 num_cores = min(4, multiprocessing.cpu_count())
 os.environ["OMP_NUM_THREADS"] = str(num_cores)
@@ -53,7 +54,7 @@ threading.Thread(target=_load_embedder_background, daemon=True).start()
 
 
 # ------------------------------------------------
-# 벡터DB 로드
+# 벡터DB 로드 유틸
 # ------------------------------------------------
 def load_vector_db(folder_path: str, base_name: str):
     t0 = time.time()
@@ -80,7 +81,7 @@ def retrieve_similar_docs(index, metadata, query_vector: np.ndarray, top_k: int 
 
 
 # ------------------------------------------------
-# (개선A) 듀얼 쿼리 — 주 고객층 + 유사매장 타겟 강화
+# (개선A) 듀얼 쿼리 — 우리 매장 강화 + 유사매장 확장
 # ------------------------------------------------
 def build_dual_queries(mct_id: str, mode: str) -> List[str]:
     """매장 중심 쿼리 + 유사매장 타겟 전략 쿼리 동시 수행"""
@@ -90,54 +91,117 @@ def build_dual_queries(mct_id: str, mode: str) -> List[str]:
         "v3": "문제 진단, 원인 분석, 개선 아이디어",
     }.get(mode, "매장 분석, 마케팅 전략, 데이터 기반 인사이트")
 
-    query_1 = f"{mct_id} 매장의 {base_intent} 및 주 고객층 강화 전략"
+    query_1 = f"{mct_id} 매장의 {base_intent} 및 주 고객층 강화 전략"  # 우리 매장 중심
     query_2 = (
-        "유사 매장에서 성공한 고객층 재정의 및 신규 타겟 확장 전략, "
-        "연령대/성별별 타겟팅, 채널별 성과, 트렌드 기반 마케팅 사례"
+        "유사 매장에서 성공한 타겟 확장 전략, 연령/성별별 타겟팅, "
+        "채널별 성과, 트렌드 기반 마케팅 사례"  # 확장 타겟 참고
     )
     return [query_1, query_2]
 
 
 # ------------------------------------------------
-# 프롬프트 생성기
+# (개선B) 현재 매장 페르소나/요약 앵커 생성
+# ------------------------------------------------
+def build_store_profile_anchor(report_results: List[dict]) -> str:
+    """
+    report_results 상단에서 summary/persona/visit_mix/loyalty 등을 추출해
+    프롬프트 컨텍스트 최상단에 고정(앵커) 삽입.
+    """
+    if not report_results:
+        return ""
+    cand = report_results[0]  # 관례상 0번째가 해당 매장/핵심 문맥일 확률이 가장 높음
+    fields = []
+    if cand.get("summary"):
+        fields.append(f"summary: {cand['summary']}")
+    if cand.get("persona"):
+        fields.append(f"persona: {cand['persona']}")
+    if cand.get("visit_mix"):
+        fields.append(f"visit_mix: {cand['visit_mix']}")
+    if cand.get("loyalty"):
+        fields.append(f"loyalty: {cand['loyalty']}")
+    if not fields:
+        return ""
+    return "📊 [현재 매장 데이터 분석]\n" + "\n".join(fields) + "\n"
+
+
+# ------------------------------------------------
+# (보조) 라인 중복 제거
+# ------------------------------------------------
+def dedupe_lines(text: str) -> str:
+    lines, seen, out = text.splitlines(), set(), []
+    for ln in lines:
+        if ln not in seen:
+            seen.add(ln)
+            out.append(ln)
+    return "\n".join(out)
+
+
+# ------------------------------------------------
+# 프롬프트 (v1/v2/v3 실행형으로 통일)
 # ------------------------------------------------
 def get_prompt_for_mode(mode: str, mct_id: str, combined_context: str) -> str:
-    """유사매장 타겟 확장 지시 추가"""
+    """
+    v1: 우리 매장 고객층 강화 + 유사매장 기반 확장 타겟을 함께 제시 (채널/문구 포함)
+    v2: 재방문 30% 이하 점주 즉시 실행 아이디어
+    v3: 요식업 문제 진단 + 개선 아이디어 (문제-해결-문구-근거)
+    """
     prompts = {
+        # ✅ v1 — 페르소나 앵커 우선, 두 축 병행 (강화 + 확장)
         "v1": f"""
-        다음은 '{mct_id}' 매장과 유사한 사례들의 고객 분석 및 마케팅 데이터입니다.
-        이를 기반으로 **AI 마케팅 리포트**를 작성하세요.
+# ☕ {mct_id} 고객 특성 기반 채널 추천 & 홍보 실행 가이드 (강화 + 확장)
 
-        {combined_context}
+아래 컨텍스트를 참고하되, **반드시 현재 매장 데이터(📊)를 최우선**으로 판단하세요.  
+유사 매장 데이터는 참고용이며, 결과에는 **[A] 현재 고객층 강화 전략**과 **[B] 유사매장 기반 확장 타겟 전략**을 함께 제시합니다.
 
-        작성 지침:
-        1️⃣ 매장 핵심 요약 — 고객 구성, 구매 패턴, 주요 상권 특징
-        2️⃣ 주 고객층 강화 전략 제시
-        3️⃣ **유사 매장의 고객층 분석 결과를 참고하여 새로운 타겟 고객층을 제시**
-        4️⃣ 각 타겟별로 적합한 마케팅 채널 및 홍보 문구를 구체화
-        """,
+{combined_context}
 
+작성 지침:
+1️⃣ 먼저 **핵심 요약(2줄 이내)** — 현재 매장의 주요 고객층/상권 특성 요약  
+2️⃣ **[A] 현재 고객층(예: 30–40대 남성, 직장인) 강화 전략 2개**  
+3️⃣ **[B] 유사매장 기반 확장 타겟 전략 1~2개** (우리 매장과의 적합성 설명 포함)  
+4️⃣ 각 아이디어 형식:
+   - 📍 추천 채널: (예: 네이버, 카카오, 직장인 커뮤니티, 지도/리뷰 등 1줄 이내로 제시)
+   - 💬 홍보 문구 예시: (타겟 공감 1줄 문장)
+   - ✅ 실행 방법: (점주가 바로 할 수 있는 구체 행동 간단하게 제시 )
+   - 📊 근거: (유사 사례/데이터 한 줄)
+5️⃣ 현재 페르소나와 **직결**되는 전략을 우선하며, 확장 타겟은 “현실적 적합성”을 간단히 설명합니다.
+""",
+
+        # ✅ v2 — 점주 즉시 실행 (재방문 30% 이하)
         "v2": f"""
-        '{mct_id}' 매장의 재방문율 분석 결과와 유사매장 사례를 참고해
-        재방문율 향상 전략을 제시하세요.
+# 🔁 {mct_id} 재방문율 향상 전략 요약 & 실천 가이드
 
-        {combined_context}
+아래 컨텍스트를 참고하여, **재방문율이 30% 이하인 매장**의 점주가 바로 실행할 수 있는 전략만 간결히 제시하세요.
 
-        작성 지침:
-        - 단기/중기/장기 리텐션 전략 제시
-        - 유사 매장의 성공 패턴을 인용해 실천 가능한 아이디어 제시
-        """,
+{combined_context}
 
+작성 지침: 
+1.**실행 가능한 마케팅 아이디어 3개**  
+2.  각 아이디어 형식:
+   - ✅ 실행 방법: (즉시 실행 행동  간단하게 제시)
+   - 💡 기대 효과: (한 줄)
+   - 📊 근거: (유사 사례/데이터 한 줄)
+4️⃣ 분석/서론 없이 **실행문 위주**로 작성합니다.
+""",
+
+        # ✅ v3 — 문제 진단 + 개선 (문구 포함)
         "v3": f"""
-        '{mct_id}' 매장과 유사한 요식업종 가맹점 데이터를 기반으로
-        문제점과 개선 아이디어를 제시하세요.
+# 🍽️ {mct_id} 요식업 매장 문제 진단 및 개선 아이디어 가이드
 
-        {combined_context}
+아래 컨텍스트를 참고하되, **현재 매장 상황/고객 특성**을 기준으로 문제를 진단하고, **즉시 실행 가능한 개선 아이디어**를 제시하세요.
 
-        작성 지침:
-        - 문제 원인 분석 + 트렌드 연계
-        - 유사매장의 개선 성공 사례를 참고하여 해결 전략 작성
-        """,
+{combined_context}
+
+작성 지침:
+1️⃣ **핵심 요약(2줄 이내)** — 현재 가장 큰 문제와 원인  
+2️⃣ **개선 아이디어 3개**  
+3️⃣ 각 아이디어 형식:
+   - ⚠️ 문제 진단: (원인 설명 1줄)
+   - ✅ 개선 아이디어: (즉시 실행 행동 간단하게 제시)
+   - 💡 기대 효과: (예상 효과 1줄)
+   - 📊 근거: (유사 사례/데이터 한 줄)
+4️⃣ 분석/서론 없이 **실행문 위주**로 작성합니다.
+""",
     }
     return prompts.get(mode, prompts["v1"])
 
@@ -150,19 +214,21 @@ def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[
     print(f"🚀 [RAG Triggered] mct_id={mct_id}, mode={mode}")
 
     try:
+        # 1) 벡터DB 로드
         base_dir = os.path.dirname(os.path.abspath(__file__))
         report_folder = os.path.join(base_dir, "vector_dbs", mode)
         shared_folder = os.path.join(base_dir, "vector_dbs", "shared")
         reports_index, reports_meta = load_vector_db(report_folder, "marketing_reports")
         segments_index, segments_meta = load_vector_db(shared_folder, "marketing_segments")
 
+        # 2) 임베딩 준비
         global embedder
         if embedder is None:
             _load_embedder_background()
             while embedder is None:
                 time.sleep(0.5)
 
-        # ✅ 듀얼 쿼리 수행 (주 고객층 + 유사매장)
+        # 3) 듀얼 쿼리 검색 (우리 매장 강화 + 유사매장 확장)
         queries = build_dual_queries(mct_id, mode)
         all_reports, all_segments = [], []
         for q in queries:
@@ -171,36 +237,51 @@ def generate_rag_summary(mct_id: str, mode: str = "v1", top_k: int = 5) -> Dict[
             all_reports.extend(retrieve_similar_docs(reports_index, reports_meta, q_vec, top_k))
             all_segments.extend(retrieve_similar_docs(segments_index, segments_meta, q_vec, top_k))
 
-        # ✅ 중복 제거
-        report_results = list({
-            r.get("id") or r.get("chunk_id") or r.get("store_code") or f"r{i}": r
-            for i, r in enumerate(all_reports)
-        }.values())
-        segment_results = list({
-            s.get("id") or s.get("chunk_id") or s.get("store_code") or f"s{i}": s
-            for i, s in enumerate(all_segments)
-        }.values())
+        # 4) (간단) 중복 제거
+        def _uniq(items: List[dict], key_priority: List[str]) -> List[dict]:
+            seen, out = set(), []
+            for i, it in enumerate(items):
+                key = None
+                for k in key_priority:
+                    if it.get(k) is not None:
+                        key = f"{k}:{it.get(k)}"
+                        break
+                if key is None:
+                    key = f"idx:{i}"
+                if key not in seen:
+                    seen.add(key)
+                    out.append(it)
+            return out
+
+        report_results = _uniq(all_reports, ["id", "chunk_id", "store_code"])
+        segment_results = _uniq(all_segments, ["id", "chunk_id", "store_code"])
 
         if not report_results and not segment_results:
             return {"error": f"'{mct_id}' 관련 데이터를 찾을 수 없습니다."}
 
-        # ✅ 컨텍스트 섹션 구분 (A: 매장, B: 유사매장)
+        # 5) 페르소나 앵커 구성
+        persona_anchor = build_store_profile_anchor(report_results)
+
+        # 6) 컨텍스트 병합 (앵커 → 우리 매장 데이터 → 유사 매장 사례)
         report_context = "\n\n".join([r.get("text", "") for r in report_results])
         segment_context = "\n\n".join([s.get("text", "") for s in segment_results])
 
-        combined_context = f"""
-        [매장 주요 분석 및 고객층 강화 데이터]
-        {report_context}
+        combined_context = ""
+        if persona_anchor:
+            combined_context += persona_anchor + "\n"
+        combined_context += (
+            "[매장 주요 분석 및 고객층 강화 데이터]\n"
+            + (report_context or "(데이터 없음)") + "\n\n"
+            + "[유사 매장 타겟 확장 전략 사례]\n"
+            + (segment_context or "(데이터 없음)")
+        )
+        combined_context = dedupe_lines(combined_context)
 
-        [유사 매장 타겟 확장 전략 사례]
-        {segment_context}
-        """
-
-        # ✅ 프롬프트 생성
+        # 7) 프롬프트 생성
         prompt = get_prompt_for_mode(mode, mct_id, combined_context)
-        print(f"🧾 [Prompt Info] 글자 수: {len(prompt):,} / 예상 토큰 수: {len(prompt)//4}")
+        print(f"🧾 [Prompt Info] 글자 수: {len(prompt):,} / 예상 토큰 수: ~{len(prompt)//4}")
 
-        # ✅ Gemini 호출
+        # 8) Gemini 호출
         t4 = time.time()
         model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)

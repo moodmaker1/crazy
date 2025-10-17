@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, re, html, base64
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -11,31 +11,262 @@ st.set_page_config(page_title="지피지기 마케팅 리포트", layout="center
 with open("app/style.css", "r", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
+#def debug_session_state():
+#    st.sidebar.write("🧠 **Session Debug Info**")
+#    st.sidebar.json({
+#        "step": st.session_state.get("step"),
+#        "mct_id": st.session_state.get("mct_id"),
+#        "category": st.session_state.get("category"),
+#    })
+#
+#debug_session_state()
+
+
+
+def set_global_background(image_path: str):
+    if not os.path.exists(image_path):
+        return
+    try:
+        with open(image_path, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode()
+    except Exception:
+        return
+
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stAppViewContainer"] {{
+            background-image:
+                linear-gradient(rgba(241,246,255,0.88), rgba(250,252,255,0.9)),
+                url("data:image/png;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-color: #f1f6ff;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+set_global_background("app/back_3.png")
+
 
 # ------------------------------
-# 세션 초기화
+# 세션 초기화 (최초 1회만)
 # ------------------------------
-if "step" not in st.session_state:
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
     st.session_state.step = "start"
-if "mct_id" not in st.session_state:
     st.session_state.mct_id = ""
-if "category" not in st.session_state:
     st.session_state.category = None
-if "revisit_rate" not in st.session_state:
     st.session_state.revisit_rate = None
+
 
 
 # ------------------------------
 # 전역 헤더
 # ------------------------------
-st.markdown("""
-    <div class="header">
-        <h2>👋 지피지기에 오신 것을 환영합니다!</h2>
-    </div>
-""", unsafe_allow_html=True)
+# 로고 표시
+logo_path = "app/logo.png"
+if os.path.exists(logo_path):
+    _, col2, _ = st.columns([1, 2, 1])
+    with col2:
+        st.image(logo_path, use_column_width=True)
+
+
 
 def go(step: str):
     st.session_state.step = step
+
+
+# =====================================================
+# ✅ RAG 하이라이트 파싱 & 포매팅
+# =====================================================
+HIGHLIGHT_LABELS = {
+    "channel": "📍 추천 채널",
+    "message": "💬 홍보 문구 예시",
+    "execution": "✅ 실행 방법",
+    "evidence": "📊 근거",
+}
+
+
+def _format_rag_text_block(value: str) -> str:
+    if not value:
+        return ""
+    lines = [line.strip() for line in value.splitlines()]
+    filtered = [line for line in lines if line]
+    if not filtered:
+        return ""
+
+    as_list = any(line.lstrip().startswith(("-", "•")) for line in filtered)
+    if as_list:
+        items = "".join(
+            f"<li>{html.escape(line.lstrip('-•').strip())}</li>"
+            for line in filtered
+        )
+        return f"<ul>{items}</ul>"
+    return "<br>".join(html.escape(line) for line in filtered)
+
+
+def extract_highlight_sections(summary: str):
+    if not summary:
+        return {}, summary
+
+    cleaned_text = summary
+    extracted = {}
+    for key, label in HIGHLIGHT_LABELS.items():
+        pattern = re.compile(
+            rf"(^|\n)[ \t]*{re.escape(label)}\s*[:：-]*\s*(.*?)(?=(\n[ \t]*[📍💬✅📊])|\n*$)",
+            re.S,
+        )
+
+        match = pattern.search(cleaned_text)
+        if not match:
+            continue
+
+        content = match.group(2).strip()
+        if content:
+            extracted[key] = content
+
+        def _replacement(m):
+            return "\n" if m.group(1) == "\n" else ""
+
+        cleaned_text = pattern.sub(_replacement, cleaned_text, count=1)
+
+    cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text).strip()
+    return extracted, cleaned_text
+
+
+def clean_remaining_text(text: str) -> str:
+    if not text:
+        return ""
+
+    filtered_lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith(tuple(HIGHLIGHT_LABELS.values())):
+            continue
+        if re.match(r"\[[A-Z]\]", stripped):
+            continue
+        if re.match(r"\d+\.", stripped):
+            continue
+        filtered_lines.append(line)
+
+    return "\n".join(filtered_lines).strip()
+
+
+def extract_action_cards(summary: str):
+    if not summary:
+        return [], summary
+
+    lines = summary.splitlines()
+    used = [False] * len(lines)
+
+    cards = []
+    heading = None
+    current_item = None
+    current_field = None
+
+    def mark_used(index: int):
+        if 0 <= index < len(used):
+            used[index] = True
+
+    def append_text(target: str, value: str):
+        return f"{target}\n{value}" if target else value
+
+    def flush_item():
+        nonlocal current_item, current_field
+        if current_item and (current_item.get("channel") or current_item.get("message")):
+            cards.append(
+                {
+                    "heading": heading or "",
+                    "title": current_item.get("title", ""),
+                    "channel": (current_item.get("channel") or "").strip(),
+                    "message": (current_item.get("message") or "").strip(),
+                    "execution": "\n".join(current_item.get("execution", [])).strip(),
+                    "evidence": "\n".join(current_item.get("evidence", [])).strip(),
+                }
+            )
+        current_item = None
+        current_field = None
+
+    i = 0
+    while i < len(lines):
+        original = lines[i]
+        stripped = original.strip()
+
+        if not stripped:
+            if current_item and current_field in {"channel", "message"}:
+                current_item[current_field] = append_text(current_item[current_field], "")
+                mark_used(i)
+            elif current_item and current_field in {"execution", "evidence"}:
+                current_item.setdefault(current_field, []).append("")
+                mark_used(i)
+            i += 1
+            continue
+
+        if stripped.startswith("[") and "]" in stripped[:6]:
+            flush_item()
+            heading = stripped
+            mark_used(i)
+            i += 1
+            continue
+
+        if re.match(r"\d+\.", stripped):
+            flush_item()
+            current_item = {
+                "title": stripped,
+                "channel": "",
+                "message": "",
+                "execution": [],
+                "evidence": [],
+            }
+            current_field = None
+            mark_used(i)
+            i += 1
+            continue
+
+        matched_label = False
+        for key, label in HIGHLIGHT_LABELS.items():
+            if stripped.startswith(label):
+                value = stripped[len(label):].strip(" :：-")
+                mark_used(i)
+                matched_label = True
+                current_field = key
+                if key in {"channel", "message"}:
+                    current_item[key] = append_text(current_item.get(key, ""), value)
+                else:
+                    bucket = current_item.setdefault(key, [])
+                    if value:
+                        bucket.append(value)
+                break
+
+        if matched_label:
+            i += 1
+            continue
+
+        if current_item and current_field:
+            mark_used(i)
+            if current_field in {"channel", "message"}:
+                current_item[current_field] = append_text(current_item[current_field], stripped)
+            else:
+                current_item.setdefault(current_field, []).append(stripped)
+            i += 1
+            continue
+
+        i += 1
+
+    flush_item()
+
+    remaining_lines = [lines[idx] for idx, flag in enumerate(used) if not flag]
+    remaining_summary = "\n".join(remaining_lines).strip()
+
+    return cards, remaining_summary
 
 
 # =====================================================
@@ -48,20 +279,124 @@ def display_ai_report(result: dict, title: str):
             st.caption(result["traceback"])
         return
 
-    # 기본 정보
-    st.markdown(f"""
-    <div class="card">
-        <h4>🏪 {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
-        <p><b>상태:</b> {result.get('status', '정보 없음')}</p>
-        <p><b>요약:</b> {result.get('message', '정보 없음')}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # 기본 정보 섹션은 현재 비어 있어 제거
+
 
     # RAG 결과
     rag_summary = result.get("rag_summary")
     if rag_summary:
         st.markdown(f"<h4>{title}</h4>", unsafe_allow_html=True)
-        st.markdown(f"<div class='card'>{rag_summary}</div>", unsafe_allow_html=True)
+        action_cards, remaining_for_highlights = extract_action_cards(rag_summary)
+        highlight_sections, remaining_summary = extract_highlight_sections(remaining_for_highlights)
+
+        if action_cards:
+            for card in action_cards:
+                heading_html = html.escape(card.get("heading", ""))
+                title_html = html.escape(card.get("title", ""))
+
+                channel_block = _format_rag_text_block(card.get("channel", ""))
+                message_block = _format_rag_text_block(card.get("message", ""))
+
+                summary_html = ""
+                if channel_block or message_block:
+                    chip_blocks = []
+                    if channel_block:
+                        chip_blocks.append(
+                            f"""
+                            <div class="highlight-card__item">
+                                <span class="highlight-card__label">📍 추천 채널</span>
+                                <div class="highlight-card__value">{channel_block}</div>
+                            </div>
+                            """
+                        )
+                    if message_block:
+                        chip_blocks.append(
+                            f"""
+                            <div class="highlight-card__item">
+                                <span class="highlight-card__label">💬 홍보 문구 예시</span>
+                                <div class="highlight-card__value">{message_block}</div>
+                            </div>
+                            """
+                        )
+                    summary_html = "".join(chip_blocks)
+
+                card_surface = f"""
+                <div class="highlight-card-surface">
+                    <div class="highlight-card__heading">{heading_html}</div>
+                    <div class="highlight-card__summary-text">{title_html}</div>
+                    <div class="highlight-card__summary">
+                        {summary_html}
+                    </div>
+                </div>
+                """
+                st.markdown(card_surface, unsafe_allow_html=True)
+
+                exec_block = _format_rag_text_block(card.get("execution", ""))
+                evidence_block = _format_rag_text_block(card.get("evidence", ""))
+
+                if exec_block or evidence_block:
+                    with st.expander("자세히 보기", expanded=False):
+                        if exec_block:
+                            st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
+                            st.markdown(exec_block, unsafe_allow_html=True)
+                        if evidence_block:
+                            st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
+                            st.markdown(evidence_block, unsafe_allow_html=True)
+
+        elif highlight_sections.get("channel") or highlight_sections.get("message"):
+            channel_block = _format_rag_text_block(highlight_sections.get("channel", ""))
+            message_block = _format_rag_text_block(highlight_sections.get("message", ""))
+
+            summary_html = ""
+            if channel_block or message_block:
+                chip_blocks = []
+                if channel_block:
+                    chip_blocks.append(
+                        f"""
+                        <div class="highlight-card__item">
+                            <span class="highlight-card__label">📍 추천 채널</span>
+                            <div class="highlight-card__value">{channel_block}</div>
+                        </div>
+                        """
+                    )
+                if message_block:
+                    chip_blocks.append(
+                        f"""
+                        <div class="highlight-card__item">
+                            <span class="highlight-card__label">💬 홍보 문구 예시</span>
+                            <div class="highlight-card__value">{message_block}</div>
+                        </div>
+                        """
+                    )
+                summary_html = "".join(chip_blocks)
+
+            card_surface = f"""
+            <div class="highlight-card-surface">
+                <div class="highlight-card__summary">
+                    {summary_html}
+                </div>
+            </div>
+            """
+            st.markdown(card_surface, unsafe_allow_html=True)
+
+            exec_block = _format_rag_text_block(highlight_sections.get("execution", ""))
+            evidence_block = _format_rag_text_block(highlight_sections.get("evidence", ""))
+
+            if exec_block or evidence_block:
+                with st.expander("자세히 보기", expanded=False):
+                    if exec_block:
+                        st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
+                        st.markdown(exec_block, unsafe_allow_html=True)
+                    if evidence_block:
+                        st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
+                        st.markdown(evidence_block, unsafe_allow_html=True)
+
+        if remaining_summary:
+            cleaned_remaining = clean_remaining_text(remaining_summary)
+            if cleaned_remaining:
+                st.markdown("<div class='card rag-summary'>", unsafe_allow_html=True)
+                st.markdown(cleaned_remaining)
+                st.markdown("</div>", unsafe_allow_html=True)
 
     # 분석
     if result.get("analysis"):
@@ -94,6 +429,21 @@ def display_ai_report(result: dict, title: str):
             segs = [f"{s.get('category','-')} / {s.get('segment','-')}" for s in refs["segments"]]
             st.markdown("🧩 **세그먼트:** " + ", ".join(segs))
 
+    
+    # ✅ 키워드 트렌드 섹션 (RAG 이후에 표시)
+    keyword_trend = result.get("keyword_trend", [])
+    industry = result.get("industry", "알 수 없음")
+    if keyword_trend:
+        st.markdown(f"<h4>📈 업종 트렌드 TOP10 ({industry}) - 검색량</h4>", unsafe_allow_html=True)
+        trend_html = "<ul style='line-height:1.8;'>"
+        for item in keyword_trend:
+            kw = item.get("keyword") or item.get("키워드") or "-"
+            val = item.get("value") or item.get("평균검색비율") or "-"
+            trend_html += f"<li>🔹 <b>{kw}</b> — {val}</li>"
+        trend_html += "</ul>"
+        st.markdown(f"<div class='card'>{trend_html}</div>", unsafe_allow_html=True)
+
+
 
 # =====================================================
 # ✅ 공통 함수 2: AI 리포트 실행
@@ -108,17 +458,56 @@ def run_ai_report(mode: str, title: str):
 # ✅ 공통 함수 3: 가맹점 코드 입력 폼
 # =====================================================
 def render_store_input(next_step: str):
-    st.markdown("""
-        <div class="card welcome-card">
-            <h3>당신의 가맹점 코드를 입력해주세요.</h3>
-        </div>
-    """, unsafe_allow_html=True)
-    st.session_state.mct_id = st.text_input("가맹점 ID", st.session_state.mct_id, placeholder="예: MCT12345")
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.button("다음으로", use_container_width=True, on_click=lambda: go(next_step))
-    with col2:
-        st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+    category = st.session_state.get("category")
+
+    if category == "카페":
+        intro_cols = st.columns([1, 2])
+        with intro_cols[0]:
+            if os.path.exists("app/1.png"):
+                st.image("app/1.png", use_column_width=True)
+        with intro_cols[1]:
+            st.markdown(
+                """
+                <div style="
+                    background: linear-gradient(135deg, #f3f4ff 0%, #ffffff 100%);
+                    border-radius: 12px;
+                    padding: 1.2rem 1.4rem;
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+                    border-left: 6px solid #6366f1;
+                ">
+                    <h3 style="margin:0 0 0.6rem 0;">안녕하세요! 카페 사장님 ☕</h3>
+                    <p style="margin:0; line-height:1.6; color:#374151;">
+                        사장님의 가게를 신속하고 정확하게 분석해<br>
+                        <strong>최고의 마케팅 전략</strong>을 제시해드릴게요.
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    # ✅ 폼으로 묶기
+    with st.form("store_input_form", clear_on_submit=False):
+        st.markdown(
+            """
+            <div class="card welcome-card">
+                <h3>당신의 가맹점 코드를 입력해주세요.</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        mct_id_input = st.text_input(
+            "가맹점 ID",
+            value=st.session_state.get("mct_id", ""),
+            placeholder="예: MCT12345"
+        )
+
+        submitted = st.form_submit_button("다음으로", use_container_width=True)
+        if submitted:
+            st.session_state.mct_id = mct_id_input.strip()
+            go(next_step)
+
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
 
 # =====================================================
@@ -202,26 +591,76 @@ def render_basic_info(mct_id: str):
     # </div>
     # """, unsafe_allow_html=True)
 
+# =====================================================
+# ✅ 공통 함수 X: 에러 메시지 표시
+# =====================================================
+def show_error_message(result: dict):
+    """모든 리포트 공통 에러 출력 함수"""
+    error_msg = result.get("error", "오류가 발생했습니다.")
+    industry = result.get("industry", None)
+    store_code = result.get("store_code", None)
+
+    # 🟡 업종 미지원
+    if "업종" in error_msg and industry:
+        st.warning(f"⚠️ '{industry}' 업종은 현재 카페 전용 모델에서만 분석 가능합니다.")
+        st.info("☕ 카페, 커피전문점, 테마카페, 테이크아웃커피 업종만 지원됩니다.")
+        st.markdown("""
+        <div style="background:#f9fafb;padding:1rem;border-radius:10px;margin-top:1rem;">
+            💡 다른 분석을 원하신다면 <b>요식업</b> 또는 <b>배달</b> 탭에서 진행해주세요.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 🔴 매장 코드 없음
+    elif "매장을 찾을 수 없습니다" in error_msg:
+        st.error("❌ 입력하신 가맹점 코드를 찾을 수 없습니다.")
+        st.info("입력한 매장 ID가 정확한지 다시 확인해주세요. 예: `A2781768EE`")
+
+    # ⚪ 일반 예외
+    else:
+        st.error(f"⚠️ {error_msg}")
+
 
 # =====================================================
 # 🏁 START
 # =====================================================
 if st.session_state.step == "start":
+
     st.markdown("""
-        <div class="card welcome-card">
-            <h3>당신은 어떤 가게의 사장입니까?</h3>
+        <div class="hero">
+            <h1>내 가게를 부탁해</h1>
+            <p class="subtitle">신한카드 AI 마케팅 프로젝트</p>
+        </div>
+        <div class="hero-description">
+            <p>
+                점포 분석 & 마케팅 전략에 특화된 AI가<br>
+                여러분의 가게를 신속, 정확히 분석해 최고의 마케팅 전략을 제안합니다.
+            </p>
         </div>
     """, unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
+    st.markdown('<div class="category-selection-wrapper">', unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.button("☕ 카페", use_container_width=True,
+        if os.path.exists("app/1.png"):
+            st.image("app/1.png")
+        st.button("카페 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="카페"), go("A_1")])
     with col2:
-        st.button("🍽️ 요식업", use_container_width=True,
+        if os.path.exists("app/2.png"):
+            st.image("app/2.png")
+        st.button("요식업 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="요식업"), go("B_1")])
     with col3:
-        st.button("🚚 배달", use_container_width=True,
+        if os.path.exists("app/3.png"):
+            st.image("app/3.png")
+        st.button("배달 진단 셰프", use_container_width=True,
                   on_click=lambda: [st.session_state.update(category="배달"), go("C_1")])
+        
+    with col4:
+        if os.path.exists("app/4.png"):
+            st.image("app/4.png")
+        st.button("분식 진단 셰프", use_container_width=True,
+                  on_click=lambda: [st.session_state.update(category="분식"), go("D_1")])
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # =====================================================
@@ -321,9 +760,9 @@ elif st.session_state.step == "A_3":
 
         # RAG 버튼
         if st.button("🧠 마케팅 채널 & 홍보 문구 제안 (RAG)", use_container_width=True):
-            run_ai_report("v1", "🧠 AI 통합 마케팅 리포트")
+            run_ai_report("v1", "🧠 AI 마케팅 채널 & 홍보 전략 리포트")
     else:
-        st.error(f"⚠️ {result.get('error', '오류가 발생했습니다.')}")
+        show_error_message(result)
 
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
@@ -636,4 +1075,116 @@ elif st.session_state.step == "C_2":
 
     # 하단 버튼 유지
     st.button("← 이전으로", use_container_width=True, on_click=lambda: go("C_1"))
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+
+# =====================================================
+# 🍱 분식 플로우
+# =====================================================
+elif st.session_state.step == "D_1":
+    # 🏪 가맹점 입력 화면
+    render_store_input("D_2")
+
+elif st.session_state.step == "D_2":
+    from experiments._5_final import store_lookup
+
+    mct_id = st.session_state.mct_id.strip()
+
+    if not mct_id:
+        st.warning("가맹점 ID를 입력해주세요.")
+    else:
+        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>🍱 분식점 상태 분석 결과</h3></div>", unsafe_allow_html=True)
+
+        with st.spinner("AI가 매장 상태를 분석 중입니다..."):
+            result = store_lookup.fetch_store_status(mct_id)
+
+        if "error" in result:
+            st.error(f"⚠️ {result['error']}")
+        else:
+            st.markdown(f"""
+            <div class="card" style="background:#fff7ed;padding:1.2rem;border-left:6px solid #f97316;">
+                <h4>{result.get('emoji', '🏪')} {result.get('store_name', '알 수 없음')} ({result.get('store_code', '-')})</h4>
+                <p><b>상태 요약:</b> {result.get('status', '-')}</p>
+                <p style="margin-top:0.5rem;">{result.get('message', '')}</p>
+                <hr>
+                <h5>📊 주요 지표</h5>
+                <ul>
+                    <li>재방문 고객 비율: {result.get('metrics', {}).get('revisit_ratio', '-')}%</li>
+                    <li>신규 고객 비율: {result.get('metrics', {}).get('new_ratio', '-')}%</li>
+                    <li>거주 고객 비율: {result.get('metrics', {}).get('resident_ratio', '-')}%</li>
+                    <li>직장 고객 비율: {result.get('metrics', {}).get('office_ratio', '-')}%</li>
+                    <li>유동 고객 비율: {result.get('metrics', {}).get('floating_ratio', '-')}%</li>
+                    <li>배달 고객 비율: {result.get('metrics', {}).get('delivery_ratio', '-')}%</li>
+                    <li>충성도 점수: {result.get('metrics', {}).get('loyalty_score', '-')}</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 게시글 생성 버튼
+            st.markdown("<p style='text-align:center;margin-top:1.2rem;'>👇 AI 홍보 게시글을 생성하려면 아래 버튼을 눌러주세요</p>", unsafe_allow_html=True)
+            st.button("📣 AI 홍보 게시글 생성", use_container_width=True, on_click=lambda: go("D_3"))
+
+    # 하단 버튼
+    st.button("← 이전으로", use_container_width=True, on_click=lambda: go("D_1"))
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+
+
+elif st.session_state.step == "D_3":
+    from experiments._5_final import store_lookup
+
+    mct_id = st.session_state.mct_id.strip()
+
+    if not mct_id:
+        st.warning("가맹점 ID를 입력해주세요.")
+    else:
+        st.markdown("<div class='card welcome-card'><h3 style='text-align:center;'>📢 분식점 홍보 게시글</h3></div>", unsafe_allow_html=True)
+
+        with st.spinner("AI가 홍보 게시글을 생성 중입니다..."):
+            result = store_lookup.fetch_store_marketing(mct_id)
+
+        if "error" in result:
+            st.error(f"⚠️ {result['error']}")
+        else:
+            posts = result.get("marketing_posts", [])
+            if not posts:
+                st.info("게시글 데이터가 없습니다.")
+            else:
+                for post in posts:
+                    st.markdown(f"### 📢 {post.get('channel', '채널 미상')} - {post.get('title', '제목 없음')}")
+                    st.markdown(post.get("copy", ""))
+
+                    # 🎯 행동 문장 추천
+                    call_to_actions = post.get("call_to_actions", {})
+                    if isinstance(call_to_actions, dict) and call_to_actions:
+                        with st.expander("🎯 행동 문장 추천"):
+                            for k, v in call_to_actions.items():
+                                st.write(f"**{k}**: {v}")
+
+                    # 💡 인사이트
+                    insights = post.get("insights", [])
+                    if isinstance(insights, (list, tuple)) and insights:
+                        with st.expander("💡 인사이트"):
+                            for insight in insights:
+                                st.write(f"- {insight}")
+
+                    # 🖼️ 마케팅 소재 아이디어
+                    assets = post.get("assets", {})
+                    if isinstance(assets, dict) and assets:
+                        with st.expander("🖼️ 마케팅 소재 아이디어"):
+                            photo_ideas = assets.get("photo_ideas")
+                            hashtags = assets.get("hashtags")
+                            location_tag = assets.get("location_tag")
+
+                            # 각 키가 있을 때만 출력
+                            if isinstance(photo_ideas, (list, tuple)) and photo_ideas:
+                                st.write("**추천 사진 아이디어:**", ", ".join(photo_ideas))
+                            if isinstance(hashtags, (list, tuple)) and hashtags:
+                                st.write("**해시태그:**", ", ".join(hashtags))
+                            if isinstance(location_tag, str) and location_tag.strip():
+                                st.write("**위치 태그:**", location_tag)
+
+                    st.markdown("---")
+
+
+    # 하단 버튼
+    st.button("← 이전으로", use_container_width=True, on_click=lambda: go("D_2"))
     st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))

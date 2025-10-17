@@ -1,9 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Hahmlet:wght@100..900&display=swap');
+
 /* style.css */
 
 /* ===== 전체 레이아웃 (유지) ===== */
 [data-testid="stAppViewContainer"] {
-  background-color: #f8fafc;
-  font-family: "Noto Sans KR", sans-serif;
+  background: linear-gradient(180deg, #f1f6ff 0%, #f7fbff 60%, #ffffff 100%);
+  font-family: "Hahmlet", sans-serif;
 }
 
 /* Streamlit 기본 블록 (유지) */
@@ -17,41 +19,37 @@
 
 /* --- 헤더 --- */
 .header {
-  background: #ffffff;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.95), rgba(222, 236, 255, 0.95));
   border-radius: 15px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 15px 30px -25px rgba(38, 94, 163, 0.45);
   padding: 1.5em 2em;
   width: 90%;
   max-width: 850px; 
   text-align: center;
   margin-top: 50px; 
-  /* ⭐ 중앙 정렬로 복원 */
   margin: 50px auto 20px auto; 
 }
-
 
 .header h2 {
   margin: 0;
   color: #1f2937;
   font-weight: 700;
   font-size: 1.6em;
-  /* ⭐ h2 텍스트 정렬 명시적으로 중앙 */
   text-align: center; 
 }
 
-
 /* ===== 카드 공통 (모든 단계의 카드) ===== */
 .card {
-  background: #ffffff;
+  background: rgba(247, 251, 255, 0.92);
   border-radius: 15px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 12px 28px -24px rgba(36, 99, 170, 0.4);
+  border: 1px solid rgba(180, 210, 245, 0.6);
   padding: 1.8em 2em;
   width: 90%;
   max-width: 850px; 
-  /* ⭐ 중앙 정렬로 복원 */
   margin: 20px auto; 
   text-align: left; 
-  min-height: unset;   /* ✅ 추가 */
+  min-height: unset;
 }
 
 .card h3 {
@@ -60,55 +58,58 @@
 
 /* --- 질문 카드 (start 단계) --- */
 .welcome-card {
-  padding: 1.0em 2em; 
-  margin-top: 20px; 
-  margin-bottom: 20px; 
-  border-radius: 15px; 
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  /* ⭐ 중앙 정렬로 복원 */
-  margin: 20px auto; 
-  text-align: center; 
+  background: linear-gradient(160deg, rgba(226, 239, 255, 0.95), rgba(209, 231, 255, 0.95));
+  border-left: 5px solid rgba(149, 196, 255, 0.65);
+  padding: 2em;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  border-radius: 15px;
+  box-shadow: 0 16px 32px -28px rgba(41, 98, 148, 0.55);
+  margin: 20px auto;
+  text-align: center;
+}
+
+.welcome-card .welcome-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 0.5rem;
 }
 
 .welcome-card h3 {
-    margin: 0; 
-    font-size: 1.4em; 
+    margin: 0;
+    font-size: 1.5em;
+    color: #0f3d63;
+    font-weight: 700;
+    text-align: center;
 }
 
-/* --- 버튼 정렬 (start 단계 버튼) --- */
-div[data-testid="stHorizontalBlock"] {
-    max-width: 360px; 
-    width: 100%; 
-    margin: 0 auto;
-    padding-left: 0 !important; 
-    padding-right: 0 !important; 
+.welcome-card p {
+    font-size: 1.1em;
+    color: #36526f;
+    margin-top: 0.5rem;
+    margin-bottom: 0;
 }
 
 /* --- 텍스트 입력 필드 정렬 보정 (A_1, B_1 단계 등) --- */
-/* Streamlit text_input, number_input 등을 포함하는 부모 요소 */
 div[data-testid="stTextInput"],
 div[data-testid="stNumberInput"] {
-    /* 텍스트 입력 필드 자체를 카드 폭에 맞게 넓히거나 정렬합니다. */
-    width: 100%; /* 카드 내부 전체 폭 사용 */
-    margin-bottom: 1rem; /* 간격 추가 */
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
 /* --- 일반 카드 내부 버튼 정렬 (A_1, B_1 단계 등) --- */
-/* 카드 내부의 st.columns로 생성된 버튼 블록 (col1, col2) */
-/* .card 내부의 stHorizontalBlock에만 적용되도록 범위를 좁힙니다. */
 .card div[data-testid="stHorizontalBlock"] {
-    /* start 단계 버튼 정렬과 구분하기 위해 max-width를 카드 폭에 가깝게 설정 */
-    max-width: 810px; /* 카드 내부 패딩을 제외한 폭 */
-    margin-top: 1.5rem; /* 입력 필드와의 간격 */
+    max-width: 810px;
+    margin-top: 1.5rem;
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
 
 /* ===== 버튼 ===== */
 div.stButton > button {
-  background-color: white;
-  color: #1f2937;
-  border: 2px solid #4b9ce2;
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #1f2a44;
+  border: 2px solid rgba(161, 203, 255, 0.8);
   border-radius: 25px;
   padding: 0.6em 1.5em;
   font-weight: 600;
@@ -117,23 +118,23 @@ div.stButton > button {
 }
 
 div.stButton > button:hover {
-  background-color: #4b9ce2;
-  color: white;
+  background-color: rgba(147, 198, 255, 0.88);
+  color: #0d2f54;
 }
 
 /* ===== 매장 정보 섹션 카드 ===== */
 .info-section {
-  background: #ffffff;
+  background: rgba(246, 250, 255, 0.95);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 10px 22px -24px rgba(31, 76, 135, 0.6);
   padding: 1.2rem 1.5rem;
   margin-bottom: 1rem;
-  border-left: 4px solid #4b9ce2;
+  border-left: 4px solid rgba(152, 197, 255, 0.85);
   transition: all 0.2s ease;
 }
 
 .info-section:hover {
-  box-shadow: 0 2px 8px rgba(75, 156, 226, 0.15);
+  box-shadow: 0 12px 26px -22px rgba(41, 91, 156, 0.55);
   transform: translateY(-1px);
 }
 
@@ -160,7 +161,7 @@ div.stButton > button:hover {
 }
 
 .info-section .insight {
-  color: #6b7280;
+  color: #4f6d91;
   font-size: 0.9em;
   font-style: italic;
   padding-left: 1.5rem;
@@ -171,3 +172,236 @@ div.stButton > button:hover {
 .grade-high { border-left-color: #10b981; }
 .grade-medium { border-left-color: #f59e0b; }
 .grade-low { border-left-color: #ef4444; }
+
+
+/* --- Category Selection Cards (Start Page) --- */
+.category-selection-wrapper div[data-testid="stHorizontalBlock"] {
+    gap: 1.5rem;
+    max-width: 850px;
+    margin: 0 auto; /* Center the block */
+}
+
+.category-selection-wrapper div[data-testid^="stVerticalBlock"] {
+    border: 1px solid rgba(171, 205, 244, 0.7);
+    border-radius: 15px;
+    padding: 1rem !important;
+    text-align: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 18px 32px -28px rgba(46, 94, 150, 0.45);
+    background: rgba(247, 251, 255, 0.9);
+}
+
+.category-selection-wrapper div[data-testid^="stVerticalBlock"]:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px -26px rgba(44, 92, 155, 0.5);
+    border-color: rgba(122, 178, 240, 0.9);
+    cursor: pointer;
+}
+
+.category-selection-wrapper img {
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    width: 100%;
+    object-fit: cover;
+    aspect-ratio: 1 / 1;
+}
+
+.category-selection-wrapper .stButton button {
+    background-color: rgba(144, 193, 255, 0.92);
+    color: #0d2f54;
+    border: none;
+    font-size: 1.1em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.category-selection-wrapper .stButton button:hover {
+    background-color: rgba(120, 176, 248, 0.92);
+    color: #06203b;
+}
+
+/* --- RAG 요약 카드 --- */
+.highlight-card-surface {
+  background: linear-gradient(160deg, rgba(217, 235, 255, 0.95), rgba(231, 241, 255, 0.95));
+  border-radius: 18px;
+  border: 1px solid rgba(164, 199, 244, 0.6);
+  box-shadow: 0 22px 38px -30px rgba(34, 86, 148, 0.55);
+  padding: 1.6rem 2rem;
+  margin: 1.5rem auto 0.6rem auto;
+  width: 90%;
+  max-width: 860px;
+  display: grid;
+  gap: 1rem;
+}
+
+.highlight-card__heading {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #05345d;
+  letter-spacing: -0.01em;
+}
+
+.highlight-card__summary-text {
+  color: #1a2f4b;
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.highlight-card__summary {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .highlight-card__summary {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+.highlight-card__item {
+  background: rgba(255, 255, 255, 0.68);
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(176, 210, 249, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.highlight-card__label {
+  font-weight: 700;
+  color: #0d3561;
+  display: block;
+  margin-bottom: 0.6rem;
+  letter-spacing: -0.01em;
+}
+
+.highlight-card__value {
+  color: #1f2f46;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+div[data-testid="stExpander"] {
+  width: 90%;
+  max-width: 860px;
+  margin: 0 auto 1.2rem auto;
+  background: rgba(244, 249, 255, 0.85);
+  border-radius: 16px;
+  border: 1px solid rgba(173, 206, 247, 0.6);
+  box-shadow: 0 18px 32px -28px rgba(33, 83, 141, 0.45);
+}
+
+div[data-testid="stExpander"] > div:first-child {
+  background: transparent;
+  color: #0d2f54;
+  font-weight: 700;
+}
+
+div[data-testid="stExpander"] button {
+  color: #0d2f54 !important;
+}
+
+div[data-testid="stExpander"] .streamlit-expanderContent {
+  padding: 1rem 1.5rem 1.4rem 1.5rem;
+}
+
+.rag-summary.card {
+  background: rgba(244, 249, 255, 0.92);
+  border: 1px solid rgba(185, 214, 249, 0.6);
+  box-shadow: 0 18px 36px -30px rgba(33, 79, 133, 0.55);
+}
+
+/* --- Streamlit Alert (warning/info) --- */
+div[data-testid="stAlert"] {
+  background: rgba(226, 240, 255, 0.95) !important;
+  border: 1px solid rgba(147, 195, 248, 0.7) !important;
+  border-radius: 14px !important;
+  color: #0e3258 !important;
+  box-shadow: 0 18px 35px -30px rgba(33, 80, 135, 0.45);
+}
+
+div[data-testid="stAlert"] span,
+div[data-testid="stAlert"] p {
+  color: #0e3258 !important;
+}
+
+/* --- Chart Wrappers --- */
+div[data-testid="stPlotlyChart"],
+div[data-testid="stVegaLiteChart"],
+div[data-testid="stAltairChart"],
+div[data-testid="stPyplotChart"],
+div[data-testid="stDeckGlJsonChart"] {
+  background: rgba(247, 251, 255, 0.88);
+  border-radius: 18px;
+  border: 1px solid rgba(177, 210, 248, 0.55);
+  padding: 1rem;
+  box-shadow: 0 20px 38px -34px rgba(28, 71, 122, 0.55);
+}
+
+div[data-testid="stPlotlyChart"] canvas,
+div[data-testid="stAltairChart"] canvas {
+  border-radius: 14px;
+}
+/* --- Hero Section --- */
+.hero {
+  width: min(920px, 94%);
+  margin: 58px auto 42px auto;
+  padding: clamp(2.2rem, 4vw, 3rem);
+  text-align: center;
+  background: linear-gradient(135deg, rgba(244, 249, 255, 0.82), rgba(230, 241, 255, 0.75));
+  border-radius: 28px;
+  border: 1px solid rgba(173, 206, 247, 0.55);
+  box-shadow: 0 32px 55px -38px rgba(26, 66, 120, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.1rem, 5vw, 2.7rem);
+  font-weight: 800;
+  color: #0f2b4a;
+  letter-spacing: -0.03em;
+}
+
+.hero .subtitle {
+  margin-top: 0.9rem;
+  font-size: clamp(1.05rem, 2.6vw, 1.2rem);
+  color: #19426c;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.hero .description {
+  margin-top: 1.3rem;
+  font-size: clamp(1rem, 2.4vw, 1.15rem);
+  line-height: 1.75;
+  color: #243b59;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    margin: 42px auto 32px auto;
+    padding: 2rem 1.6rem;
+  }
+  
+  .hero .description {
+    line-height: 1.6;
+  }
+}
+
+/* --- Hero Description (덜 강조 버전) --- */
+.hero-description {
+  width: min(820px, 90%);
+  margin: 1.5rem auto 2.5rem auto;
+  text-align: center;
+  color: #4b5563; /* 회색 톤 */
+  font-size: 2rem !important;
+  font-weight: 500;
+  line-height: 1.7;
+  opacity: 0.85;
+}
+
+.hero-description p {
+  margin: 0;
+  padding: 0.5rem 0;
+}
