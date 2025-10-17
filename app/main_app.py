@@ -1,4 +1,4 @@
-import sys, os, re, html
+import sys, os, re, html, base64
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -10,6 +10,37 @@ from analyzer.report_generator import generate_marketing_report
 st.set_page_config(page_title="지피지기 마케팅 리포트", layout="centered")
 with open("app/style.css", "r", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+
+def set_global_background(image_path: str):
+    if not os.path.exists(image_path):
+        return
+    try:
+        with open(image_path, "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode()
+    except Exception:
+        return
+
+    st.markdown(
+        f"""
+        <style>
+        [data-testid="stAppViewContainer"] {{
+            background-image:
+                linear-gradient(rgba(241,246,255,0.88), rgba(250,252,255,0.9)),
+                url("data:image/png;base64,{encoded}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-color: #f1f6ff;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+set_global_background("app/back_3.png")
 
 
 # ------------------------------
@@ -35,12 +66,7 @@ if os.path.exists(logo_path):
     with col2:
         st.image(logo_path, use_column_width=True)
 
-st.markdown("""
-    <div class="header">
-        <h2>내 가게를 부탁해</h2>
-        <p style="font-size: 1rem; color: #6b7280; margin-top: 0.5rem;">신한카드 AI 마케팅 프로젝트</p>
-    </div>
-""", unsafe_allow_html=True)
+
 
 def go(step: str):
     st.session_state.step = step
@@ -102,6 +128,26 @@ def extract_highlight_sections(summary: str):
 
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text).strip()
     return extracted, cleaned_text
+
+
+def clean_remaining_text(text: str) -> str:
+    if not text:
+        return ""
+
+    filtered_lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith(tuple(HIGHLIGHT_LABELS.values())):
+            continue
+        if re.match(r"\[[A-Z]\]", stripped):
+            continue
+        if re.match(r"\d+\.", stripped):
+            continue
+        filtered_lines.append(line)
+
+    return "\n".join(filtered_lines).strip()
 
 
 def extract_action_cards(summary: str):
@@ -250,12 +296,64 @@ def display_ai_report(result: dict, title: str):
                 heading_html = html.escape(card.get("heading", ""))
                 title_html = html.escape(card.get("title", ""))
 
-                summary_blocks = []
                 channel_block = _format_rag_text_block(card.get("channel", ""))
                 message_block = _format_rag_text_block(card.get("message", ""))
 
+                summary_html = ""
+                if channel_block or message_block:
+                    chip_blocks = []
+                    if channel_block:
+                        chip_blocks.append(
+                            f"""
+                            <div class="highlight-card__item">
+                                <span class="highlight-card__label">📍 추천 채널</span>
+                                <div class="highlight-card__value">{channel_block}</div>
+                            </div>
+                            """
+                        )
+                    if message_block:
+                        chip_blocks.append(
+                            f"""
+                            <div class="highlight-card__item">
+                                <span class="highlight-card__label">💬 홍보 문구 예시</span>
+                                <div class="highlight-card__value">{message_block}</div>
+                            </div>
+                            """
+                        )
+                    summary_html = "".join(chip_blocks)
+
+                card_surface = f"""
+                <div class="highlight-card-surface">
+                    <div class="highlight-card__heading">{heading_html}</div>
+                    <div class="highlight-card__summary-text">{title_html}</div>
+                    <div class="highlight-card__summary">
+                        {summary_html}
+                    </div>
+                </div>
+                """
+                st.markdown(card_surface, unsafe_allow_html=True)
+
+                exec_block = _format_rag_text_block(card.get("execution", ""))
+                evidence_block = _format_rag_text_block(card.get("evidence", ""))
+
+                if exec_block or evidence_block:
+                    with st.expander("자세히 보기", expanded=False):
+                        if exec_block:
+                            st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
+                            st.markdown(exec_block, unsafe_allow_html=True)
+                        if evidence_block:
+                            st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
+                            st.markdown(evidence_block, unsafe_allow_html=True)
+
+        elif highlight_sections.get("channel") or highlight_sections.get("message"):
+            channel_block = _format_rag_text_block(highlight_sections.get("channel", ""))
+            message_block = _format_rag_text_block(highlight_sections.get("message", ""))
+
+            summary_html = ""
+            if channel_block or message_block:
+                chip_blocks = []
                 if channel_block:
-                    summary_blocks.append(
+                    chip_blocks.append(
                         f"""
                         <div class="highlight-card__item">
                             <span class="highlight-card__label">📍 추천 채널</span>
@@ -263,9 +361,8 @@ def display_ai_report(result: dict, title: str):
                         </div>
                         """
                     )
-
                 if message_block:
-                    summary_blocks.append(
+                    chip_blocks.append(
                         f"""
                         <div class="highlight-card__item">
                             <span class="highlight-card__label">💬 홍보 문구 예시</span>
@@ -273,110 +370,35 @@ def display_ai_report(result: dict, title: str):
                         </div>
                         """
                     )
+                summary_html = "".join(chip_blocks)
 
-                details_blocks = []
-                exec_block = _format_rag_text_block(card.get("execution", ""))
-                evidence_block = _format_rag_text_block(card.get("evidence", ""))
+            card_surface = f"""
+            <div class="highlight-card-surface">
+                <div class="highlight-card__summary">
+                    {summary_html}
+                </div>
+            </div>
+            """
+            st.markdown(card_surface, unsafe_allow_html=True)
 
-                if exec_block:
-                    details_blocks.append(
-                        f"""
-                        <div class="highlight-card__detail">
-                            <h5>✅ 실행 방법</h5>
-                            {exec_block}
-                        </div>
-                        """
-                    )
-
-                if evidence_block:
-                    details_blocks.append(
-                        f"""
-                        <div class="highlight-card__detail">
-                            <h5>📊 근거</h5>
-                            {evidence_block}
-                        </div>
-                        """
-                    )
-
-                highlight_html = f"""
-                <details class="highlight-card">
-                    <summary>
-                        <div class="highlight-card__heading">{heading_html}</div>
-                        <div class="highlight-card__summary-text">{title_html}</div>
-                        <div class="highlight-card__summary">
-                            {''.join(summary_blocks)}
-                        </div>
-                    </summary>
-                    {f'<div class="highlight-card__details">{"".join(details_blocks)}</div>' if details_blocks else ''}
-                </details>
-                """
-                st.markdown(highlight_html, unsafe_allow_html=True)
-
-        elif highlight_sections.get("channel") or highlight_sections.get("message"):
-            summary_blocks = []
-            channel_block = _format_rag_text_block(highlight_sections.get("channel", ""))
-            message_block = _format_rag_text_block(highlight_sections.get("message", ""))
-
-            if channel_block:
-                summary_blocks.append(
-                    f"""
-                    <div class="highlight-card__item">
-                        <span class="highlight-card__label">📍 추천 채널</span>
-                        <div class="highlight-card__value">{channel_block}</div>
-                    </div>
-                    """
-                )
-
-            if message_block:
-                summary_blocks.append(
-                    f"""
-                    <div class="highlight-card__item">
-                        <span class="highlight-card__label">💬 홍보 문구 예시</span>
-                        <div class="highlight-card__value">{message_block}</div>
-                    </div>
-                    """
-                )
-
-            details_blocks = []
             exec_block = _format_rag_text_block(highlight_sections.get("execution", ""))
             evidence_block = _format_rag_text_block(highlight_sections.get("evidence", ""))
 
-            if exec_block:
-                details_blocks.append(
-                    f"""
-                    <div class="highlight-card__detail">
-                        <h5>✅ 실행 방법</h5>
-                        {exec_block}
-                    </div>
-                    """
-                )
-
-            if evidence_block:
-                details_blocks.append(
-                    f"""
-                    <div class="highlight-card__detail">
-                        <h5>📊 근거</h5>
-                        {evidence_block}
-                    </div>
-                    """
-                )
-
-            highlight_html = f"""
-            <details class="highlight-card">
-                <summary>
-                    <div class="highlight-card__summary">
-                        {''.join(summary_blocks)}
-                    </div>
-                </summary>
-                {f'<div class="highlight-card__details">{"".join(details_blocks)}</div>' if details_blocks else ''}
-            </details>
-            """
-            st.markdown(highlight_html, unsafe_allow_html=True)
+            if exec_block or evidence_block:
+                with st.expander("자세히 보기", expanded=False):
+                    if exec_block:
+                        st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
+                        st.markdown(exec_block, unsafe_allow_html=True)
+                    if evidence_block:
+                        st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
+                        st.markdown(evidence_block, unsafe_allow_html=True)
 
         if remaining_summary:
-            st.markdown("<div class='card rag-summary'>", unsafe_allow_html=True)
-            st.markdown(remaining_summary)
-            st.markdown("</div>", unsafe_allow_html=True)
+            cleaned_remaining = clean_remaining_text(remaining_summary)
+            if cleaned_remaining:
+                st.markdown("<div class='card rag-summary'>", unsafe_allow_html=True)
+                st.markdown(cleaned_remaining)
+                st.markdown("</div>", unsafe_allow_html=True)
 
     # 분석
     if result.get("analysis"):
@@ -424,11 +446,41 @@ def run_ai_report(mode: str, title: str):
 # ✅ 공통 함수 3: 가맹점 코드 입력 폼
 # =====================================================
 def render_store_input(next_step: str):
-    st.markdown("""
+    category = st.session_state.get("category")
+
+    if category == "카페":
+        intro_cols = st.columns([1, 2])
+        with intro_cols[0]:
+            if os.path.exists("app/1.png"):
+                st.image("app/1.png", use_column_width=True)
+        with intro_cols[1]:
+            st.markdown(
+                """
+                <div style="
+                    background: linear-gradient(135deg, #f3f4ff 0%, #ffffff 100%);
+                    border-radius: 12px;
+                    padding: 1.2rem 1.4rem;
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+                    border-left: 6px solid #6366f1;
+                ">
+                    <h3 style="margin:0 0 0.6rem 0;">안녕하세요! 카페 사장님 ☕</h3>
+                    <p style="margin:0; line-height:1.6; color:#374151;">
+                        사장님의 가게를 신속하고 정확하게 분석해<br>
+                        <strong>최고의 마케팅 전략</strong>을 제시해드릴게요.
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        """
         <div class="card welcome-card">
             <h3>당신의 가맹점 코드를 입력해주세요.</h3>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
     st.session_state.mct_id = st.text_input("가맹점 ID", st.session_state.mct_id, placeholder="예: MCT12345")
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -525,8 +577,15 @@ def render_basic_info(mct_id: str):
 if st.session_state.step == "start":
 
     st.markdown("""
-        <div class="card welcome-card">
-            <h3>'점포 분석 & 마케팅 전략에 특화된 AI가 여러분의 가게를 신속, 정확히 분석해 최고의 마케팅 전략을 제안합니다'</h3>
+        <div class="hero">
+            <h1>내 가게를 부탁해</h1>
+            <p class="subtitle">신한카드 AI 마케팅 프로젝트</p>
+        </div>
+        <div class="hero-description">
+            <p>
+                점포 분석 & 마케팅 전략에 특화된 AI가<br>
+                여러분의 가게를 신속, 정확히 분석해 최고의 마케팅 전략을 제안합니다.
+            </p>
         </div>
     """, unsafe_allow_html=True)
     st.markdown('<div class="category-selection-wrapper">', unsafe_allow_html=True)
