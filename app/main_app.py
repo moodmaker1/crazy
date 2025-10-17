@@ -76,10 +76,10 @@ def go(step: str):
 # ✅ RAG 하이라이트 파싱 & 포매팅
 # =====================================================
 HIGHLIGHT_LABELS = {
-    "channel": "📍 추천 채널",
-    "message": "💬 홍보 문구 예시",
-    "execution": "✅ 실행 방법",
-    "evidence": "📊 근거",
+    "channel": "추천 채널",
+    "message": "홍보 문구 예시",
+    "execution": "실행 방법",
+    "evidence": "근거",
 }
 
 
@@ -101,15 +101,66 @@ def _format_rag_text_block(value: str) -> str:
     return "<br>".join(html.escape(line) for line in filtered)
 
 
+def _split_highlight_entries(value: str):
+    if not value:
+        return []
+
+    entries = []
+    buffer = []
+    for raw_line in value.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if buffer:
+                entries.append(" ".join(buffer))
+                buffer = []
+            continue
+        # ✅ bullet point 인식: -, •, ○, *
+        if stripped.startswith(("-", "•", "○", "*")):
+            stripped = stripped.lstrip("-•○*").strip()
+            if buffer:
+                entries.append(" ".join(buffer))
+                buffer = []
+            if stripped:
+                entries.append(stripped)
+        else:
+            buffer.append(stripped)
+
+    if buffer:
+        entries.append(" ".join(buffer))
+
+    formatted = []
+    for entry in entries:
+        parts = [html.escape(part.strip()) for part in entry.split("\n") if part.strip()]
+        formatted.append("<br>".join(parts))
+    return formatted
+
+
+def _normalize_section_heading(value: str) -> str:
+    if not value:
+        return ""
+    stripped = value.strip()
+    stripped = stripped.lstrip("# ").strip()
+    if stripped.startswith("☕"):
+        return ""
+    stripped = re.sub(r"^\[[^\]]+\]\s*", "", stripped)
+    return stripped
+
+
 def extract_highlight_sections(summary: str):
     if not summary:
         return {}, summary
 
     cleaned_text = summary
     extracted = {}
+    label_stop = "|".join(re.escape(value) for value in HIGHLIGHT_LABELS.values())
+    stop_lookahead = (
+        rf"(?=(\n[ \t]*(?:{label_stop})\s*[:：-])|\Z)"
+        if label_stop
+        else r"(?=\Z)"
+    )
     for key, label in HIGHLIGHT_LABELS.items():
         pattern = re.compile(
-            rf"(^|\n)[ \t]*{re.escape(label)}\s*[:：-]*\s*(.*?)(?=(\n[ \t]*[📍💬✅📊])|\n*$)",
+            rf"(^|\n)[ \t]*{re.escape(label)}\s*[:：-]*\s*(.*?){stop_lookahead}",
             re.S,
         )
 
@@ -154,6 +205,9 @@ def extract_action_cards(summary: str):
     if not summary:
         return [], summary
 
+    # ✅ 마크다운 제거 (Gemini가 **bold** 형식으로 생성하는 경우 대비)
+    summary = summary.replace("**", "")
+
     lines = summary.splitlines()
     used = [False] * len(lines)
 
@@ -161,6 +215,22 @@ def extract_action_cards(summary: str):
     heading = None
     current_item = None
     current_field = None
+    card_counter = 0
+
+    def start_new_item(title: str = "", fallback_title: str = ""):
+        nonlocal current_item, current_field, card_counter
+        card_counter += 1
+        title_clean = (title or "").strip()
+        fallback_clean = (fallback_title or "").strip()
+        resolved_title = title_clean or fallback_clean or f"추천 전략 #{card_counter}"
+        current_item = {
+            "title": resolved_title,
+            "channel": "",
+            "message": "",
+            "execution": [],
+            "evidence": [],
+        }
+        current_field = None
 
     def mark_used(index: int):
         if 0 <= index < len(used):
@@ -200,40 +270,53 @@ def extract_action_cards(summary: str):
             i += 1
             continue
 
-        if stripped.startswith("[") and "]" in stripped[:6]:
+        normalized = stripped.lstrip("-•○* ").strip()
+
+        if normalized.startswith("[") and "]" in normalized[:6]:
             flush_item()
-            heading = stripped
+            heading = normalized
             mark_used(i)
             i += 1
             continue
 
-        if re.match(r"\d+\.", stripped):
+        if re.match(r"\d+\.", normalized):
             flush_item()
-            current_item = {
-                "title": stripped,
-                "channel": "",
-                "message": "",
-                "execution": [],
-                "evidence": [],
-            }
-            current_field = None
+            start_new_item(normalized, heading)
             mark_used(i)
             i += 1
             continue
 
         matched_label = False
         for key, label in HIGHLIGHT_LABELS.items():
-            if stripped.startswith(label):
-                value = stripped[len(label):].strip(" :：-")
+            label_variants = [label]
+            plain_label = re.sub(r"^[^\w가-힣]+", "", label).strip()
+            if plain_label and plain_label not in label_variants:
+                label_variants.append(plain_label)
+            compact_label = re.sub(r"\s+", "", plain_label or label)
+            if compact_label and compact_label not in label_variants:
+                label_variants.append(compact_label)
+
+            for variant in label_variants:
+                # ✅ bullet point (•, -, ○, *) 제거 후 매칭
+                cleaned_for_match = stripped.lstrip("-•○* ").strip()
+                if cleaned_for_match.startswith(variant):
+                    value = cleaned_for_match[len(variant):].lstrip(" :：-")
+                    mark_used(i)
+                    matched_label = True
+                    if current_item is None:
+                        fallback_title = _normalize_section_heading(heading) if heading else ""
+                        start_new_item("", fallback_title)
+                    current_field = key
+                    if key in {"channel", "message"}:
+                        current_item[key] = append_text(current_item.get(key, ""), value)
+                    else:
+                        bucket = current_item.setdefault(key, [])
+                        if value:
+                            bucket.append(value)
+                    break
+
+            if matched_label:
                 mark_used(i)
-                matched_label = True
-                current_field = key
-                if key in {"channel", "message"}:
-                    current_item[key] = append_text(current_item.get(key, ""), value)
-                else:
-                    bucket = current_item.setdefault(key, [])
-                    if value:
-                        bucket.append(value)
                 break
 
         if matched_label:
@@ -243,9 +326,9 @@ def extract_action_cards(summary: str):
         if current_item and current_field:
             mark_used(i)
             if current_field in {"channel", "message"}:
-                current_item[current_field] = append_text(current_item[current_field], stripped)
+                current_item[current_field] = append_text(current_item[current_field], normalized)
             else:
-                current_item.setdefault(current_field, []).append(stripped)
+                current_item.setdefault(current_field, []).append(normalized)
             i += 1
             continue
 
@@ -287,111 +370,188 @@ def display_ai_report(result: dict, title: str):
     # RAG 결과
     rag_summary = result.get("rag_summary")
     if rag_summary:
+        rag_summary = re.sub(r"^\s*[#☕][^\n]*(\n|$)", "", rag_summary, count=1).strip()
         st.markdown(f"<h4>{title}</h4>", unsafe_allow_html=True)
+
+        # 🔍 디버깅: 파싱 전 요약 텍스트 확인
+        st.write(f"🔍 DEBUG: rag_summary 길이 = {len(rag_summary)}")
+        with st.expander("📄 RAG 원본 텍스트 보기"):
+            st.code(rag_summary)
+
         action_cards, remaining_for_highlights = extract_action_cards(rag_summary)
+
+        # 🔍 디버깅: 파싱된 카드 수 확인
+        st.write(f"🔍 DEBUG: action_cards 개수 = {len(action_cards)}")
+        if action_cards:
+            for i, card in enumerate(action_cards):
+                st.write(f"🔍 Card {i+1}:")
+                st.write(f"  - heading: {card.get('heading')}")
+                st.write(f"  - title: {card.get('title')[:80] if card.get('title') else 'None'}")
+                st.write(f"  - channel: {card.get('channel')[:80] if card.get('channel') else 'None'}")
+                st.write(f"  - message: {card.get('message')[:80] if card.get('message') else 'None'}")
+        else:
+            st.error("⚠️ action_cards가 비어있음! → 파싱 실패")
+            st.write(f"🔍 remaining_for_highlights 길이: {len(remaining_for_highlights)}")
+            with st.expander("📄 remaining 텍스트 보기"):
+                st.code(remaining_for_highlights[:1000])
+
         highlight_sections, remaining_summary = extract_highlight_sections(remaining_for_highlights)
 
         if action_cards:
+            current_heading = None
             for card in action_cards:
-                heading_html = html.escape(card.get("heading", ""))
-                title_html = html.escape(card.get("title", ""))
+                heading_text = _normalize_section_heading(card.get("heading", ""))
+                if heading_text and heading_text != current_heading:
+                    st.markdown(
+                        f"<h4 class='proposal-section__title'>{html.escape(heading_text)}</h4>",
+                        unsafe_allow_html=True,
+                    )
+                    current_heading = heading_text
 
-                channel_block = _format_rag_text_block(card.get("channel", ""))
-                message_block = _format_rag_text_block(card.get("message", ""))
+                channel_items = _split_highlight_entries(card.get("channel", ""))
+                message_items = _split_highlight_entries(card.get("message", ""))
+                entry_count = max(len(channel_items), len(message_items))
+                if entry_count == 0:
+                    continue
 
-                summary_html = ""
-                if channel_block or message_block:
-                    chip_blocks = []
-                    if channel_block:
-                        chip_blocks.append(
+                exec_items = _split_highlight_entries(card.get("execution", ""))
+                evidence_items = _split_highlight_entries(card.get("evidence", ""))
+
+                detail_sections = []
+                if exec_items:
+                    detail_sections.append(
+                        "<div class='proposal-card__detail'><h5>실행 방법</h5><ul>"
+                        + "".join(f"<li>{item}</li>" for item in exec_items)
+                        + "</ul></div>"
+                    )
+                if evidence_items:
+                    detail_sections.append(
+                        "<div class='proposal-card__detail'><h5>근거</h5><ul>"
+                        + "".join(f"<li>{item}</li>" for item in evidence_items)
+                        + "</ul></div>"
+                    )
+                detail_html = (
+                    "<div class='proposal-card__details'>" + "".join(detail_sections) + "</div>"
+                    if detail_sections
+                    else ""
+                )
+
+                title_html = html.escape(card.get("title", "").strip())
+                default_title = "추천 전략"
+                for idx in range(entry_count):
+                    channel_html = channel_items[idx] if idx < len(channel_items) else ""
+                    message_html = message_items[idx] if idx < len(message_items) else ""
+
+                    chips = []
+                    if channel_html:
+                            chips.append(
+                                f"""
+                                <div class="proposal-card__chip">
+                                    <span class="proposal-card__label">추천 채널</span>
+                                    <span class="proposal-card__value">{channel_html}</span>
+                                </div>
+                                """
+                            )
+                    if message_html:
+                        chips.append(
                             f"""
-                            <div class="highlight-card__item">
-                                <span class="highlight-card__label">📍 추천 채널</span>
-                                <div class="highlight-card__value">{channel_block}</div>
+                            <div class="proposal-card__chip">
+                                <span class="proposal-card__label">홍보 문구 예시</span>
+                                <span class="proposal-card__value">{message_html}</span>
                             </div>
                             """
                         )
-                    if message_block:
-                        chip_blocks.append(
-                            f"""
-                            <div class="highlight-card__item">
-                                <span class="highlight-card__label">💬 홍보 문구 예시</span>
-                                <div class="highlight-card__value">{message_block}</div>
+                    chips_html = "".join(chips)
+
+                    summary_title = title_html or default_title
+                    if entry_count > 1:
+                        if title_html:
+                            summary_title = f"{title_html} #{idx + 1}"
+                        else:
+                            summary_title = f"{default_title} #{idx + 1}"
+
+                    card_html = f"""
+                    <details class="proposal-card">
+                        <summary>
+                            <div class="proposal-card__summary">
+                                <div class="proposal-card__heading">{summary_title}</div>
+                                <div class="proposal-card__chips">{chips_html}</div>
                             </div>
-                            """
-                        )
-                    summary_html = "".join(chip_blocks)
-
-                card_surface = f"""
-                <div class="highlight-card-surface">
-                    <div class="highlight-card__heading">{heading_html}</div>
-                    <div class="highlight-card__summary-text">{title_html}</div>
-                    <div class="highlight-card__summary">
-                        {summary_html}
-                    </div>
-                </div>
-                """
-                st.markdown(card_surface, unsafe_allow_html=True)
-
-                exec_block = _format_rag_text_block(card.get("execution", ""))
-                evidence_block = _format_rag_text_block(card.get("evidence", ""))
-
-                if exec_block or evidence_block:
-                    with st.expander("자세히 보기", expanded=False):
-                        if exec_block:
-                            st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
-                            st.markdown(exec_block, unsafe_allow_html=True)
-                        if evidence_block:
-                            st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
-                            st.markdown(evidence_block, unsafe_allow_html=True)
+                        </summary>
+                        {detail_html}
+                    </details>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
 
         elif highlight_sections.get("channel") or highlight_sections.get("message"):
-            channel_block = _format_rag_text_block(highlight_sections.get("channel", ""))
-            message_block = _format_rag_text_block(highlight_sections.get("message", ""))
+            channel_items = _split_highlight_entries(highlight_sections.get("channel", ""))
+            message_items = _split_highlight_entries(highlight_sections.get("message", ""))
 
-            summary_html = ""
-            if channel_block or message_block:
-                chip_blocks = []
-                if channel_block:
-                    chip_blocks.append(
+            exec_items = _split_highlight_entries(highlight_sections.get("execution", ""))
+            evidence_items = _split_highlight_entries(highlight_sections.get("evidence", ""))
+
+            detail_sections = []
+            if exec_items:
+                detail_sections.append(
+                    "<div class='proposal-card__detail'><h5>실행 방법</h5><ul>"
+                    + "".join(f"<li>{item}</li>" for item in exec_items)
+                    + "</ul></div>"
+                )
+            if evidence_items:
+                detail_sections.append(
+                    "<div class='proposal-card__detail'><h5>근거</h5><ul>"
+                    + "".join(f"<li>{item}</li>" for item in evidence_items)
+                    + "</ul></div>"
+                )
+            detail_html = (
+                "<div class='proposal-card__details'>" + "".join(detail_sections) + "</div>"
+                if detail_sections
+                else ""
+            )
+
+            entry_count = max(len(channel_items), len(message_items))
+            if entry_count == 0:
+                entry_count = 1
+            for idx in range(entry_count):
+                channel_html = channel_items[idx] if idx < len(channel_items) else ""
+                message_html = message_items[idx] if idx < len(message_items) else ""
+                chips = []
+                if channel_html:
+                    chips.append(
                         f"""
-                        <div class="highlight-card__item">
-                            <span class="highlight-card__label">📍 추천 채널</span>
-                            <div class="highlight-card__value">{channel_block}</div>
+                        <div class="proposal-card__chip">
+                            <span class="proposal-card__label">추천 채널</span>
+                            <span class="proposal-card__value">{channel_html}</span>
                         </div>
                         """
                     )
-                if message_block:
-                    chip_blocks.append(
+                if message_html:
+                    chips.append(
                         f"""
-                        <div class="highlight-card__item">
-                            <span class="highlight-card__label">💬 홍보 문구 예시</span>
-                            <div class="highlight-card__value">{message_block}</div>
+                        <div class="proposal-card__chip">
+                            <span class="proposal-card__label">홍보 문구 예시</span>
+                            <span class="proposal-card__value">{message_html}</span>
                         </div>
                         """
                     )
-                summary_html = "".join(chip_blocks)
+                chips_html = "".join(chips)
 
-            card_surface = f"""
-            <div class="highlight-card-surface">
-                <div class="highlight-card__summary">
-                    {summary_html}
-                </div>
-            </div>
-            """
-            st.markdown(card_surface, unsafe_allow_html=True)
+                summary_title = "추천 제안"
+                if entry_count > 1:
+                    summary_title = f"추천 제안 #{idx + 1}"
 
-            exec_block = _format_rag_text_block(highlight_sections.get("execution", ""))
-            evidence_block = _format_rag_text_block(highlight_sections.get("evidence", ""))
-
-            if exec_block or evidence_block:
-                with st.expander("자세히 보기", expanded=False):
-                    if exec_block:
-                        st.markdown("<h5>✅ 실행 방법</h5>", unsafe_allow_html=True)
-                        st.markdown(exec_block, unsafe_allow_html=True)
-                    if evidence_block:
-                        st.markdown("<h5>📊 근거</h5>", unsafe_allow_html=True)
-                        st.markdown(evidence_block, unsafe_allow_html=True)
+                card_html = f"""
+                <details class="proposal-card">
+                    <summary>
+                        <div class="proposal-card__summary">
+                            <div class="proposal-card__heading">{summary_title}</div>
+                            <div class="proposal-card__chips">{chips_html}</div>
+                        </div>
+                    </summary>
+                    {detail_html}
+                </details>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
 
         if remaining_summary:
             cleaned_remaining = clean_remaining_text(remaining_summary)
