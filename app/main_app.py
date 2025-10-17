@@ -11,6 +11,17 @@ st.set_page_config(page_title="지피지기 마케팅 리포트", layout="center
 with open("app/style.css", "r", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
+def debug_session_state():
+    st.sidebar.write("🧠 **Session Debug Info**")
+    st.sidebar.json({
+        "step": st.session_state.get("step"),
+        "mct_id": st.session_state.get("mct_id"),
+        "category": st.session_state.get("category"),
+    })
+
+debug_session_state()
+
+
 
 def set_global_background(image_path: str):
     if not os.path.exists(image_path):
@@ -44,16 +55,15 @@ set_global_background("app/back_3.png")
 
 
 # ------------------------------
-# 세션 초기화
+# 세션 초기화 (최초 1회만)
 # ------------------------------
-if "step" not in st.session_state:
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
     st.session_state.step = "start"
-if "mct_id" not in st.session_state or not st.session_state.mct_id:
     st.session_state.mct_id = ""
-if "category" not in st.session_state:
     st.session_state.category = None
-if "revisit_rate" not in st.session_state:
     st.session_state.revisit_rate = None
+
 
 
 # ------------------------------
@@ -473,37 +483,29 @@ def render_store_input(next_step: str):
                 unsafe_allow_html=True,
             )
 
-    st.markdown(
-        """
-        <div class="card welcome-card">
-            <h3>당신의 가맹점 코드를 입력해주세요.</h3>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-    
-    mct_id_input = st.text_input(
-        "가맹점 ID",
-        value=st.session_state.get("mct_id", ""),
-        placeholder="예: MCT12345"
-    )
+    # ✅ 폼으로 묶기
+    with st.form("store_input_form", clear_on_submit=False):
+        st.markdown(
+            """
+            <div class="card welcome-card">
+                <h3>당신의 가맹점 코드를 입력해주세요.</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    def handle_next():
-        # ✅ 1. 먼저 세션에 값 저장
-        st.session_state.mct_id = mct_id_input.strip()
-        # ✅ 2. step 이동은 다음 rerun 시점에 적용
-        st.session_state.to_next = True
+        mct_id_input = st.text_input(
+            "가맹점 ID",
+            value=st.session_state.get("mct_id", ""),
+            placeholder="예: MCT12345"
+        )
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.button("다음으로", use_container_width=True, on_click=handle_next)
-    with col2:
-        st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
+        submitted = st.form_submit_button("다음으로", use_container_width=True)
+        if submitted:
+            st.session_state.mct_id = mct_id_input.strip()
+            go(next_step)
 
-    # ✅ rerun 후 step 이동
-    if st.session_state.get("to_next"):
-        st.session_state.to_next = False
-        go(next_step)
+    st.button("← 처음으로", use_container_width=True, on_click=lambda: go("start"))
 
 
 # =====================================================
